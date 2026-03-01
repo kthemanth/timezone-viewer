@@ -2,71 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Keep global CSS minimal; Tailwind handles styling.
+   These are app-wide sensible defaults. */
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-white border border-slate-200 shadow-sm;
+  }
+
+  .btn {
+    @apply h-9 px-3 rounded-xl text-sm font-medium transition-colors;
+  }
+
+  .btn-ghost {
+    @apply btn bg-slate-100 hover:bg-slate-200 text-slate-900;
+  }
+
+  .btn-primary {
+    @apply btn bg-slate-900 hover:bg-slate-800 text-white;
+  }
+}
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Use system font stack, clean and readable */
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+    Arial, "Apple Color Emoji", "Segoe UI Emoji";
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* Force a consistent light UI for now */
+  color-scheme: light;
 
-  font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+html,
+body,
+#root {
+  height: 100%;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  /* Let your App layout control everything */
+  background: #f8fafc; /* slate-50 */
+  color: #0f172a;      /* slate-900 */
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+/* Make media elements behave nicely by default */
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+/* Optional: nicer focus ring globally (Tailwind-like) */
+:focus-visible {
+  outline: 2px solid rgba(15, 23, 42, 0.35); /* slate-900-ish */
+  outline-offset: 2px;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* Optional: smoother scrolling for the timeline */
+* {
+  scroll-behavior: smooth;
 }
