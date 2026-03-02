@@ -1,6 +1,8 @@
 import { FaArrowCircleLeft } from "react-icons/fa";
 import { FaArrowCircleRight } from "react-icons/fa";
 
+import { Link } from "react-router-dom";
+
 const ICON_SIZE = 30;
 
 
@@ -63,23 +65,26 @@ export default function Month() {
       </div>
 
       {/* CALENDAR GRID */}
-      <div className="grid grid-cols-7 flex-1 auto-rows-fr gap-px bg-slate-200 mt-2">
+      <div className="grid grid-cols-7 flex-1 auto-rows-fr gap-px bg-slate-100 mt-2">
         {days.map((day, idx) => (
           <div
             key={idx}
-            className="bg-white p-2 flex flex-col"
+            className={idx%7 === 0 || idx%7===6
+              ? "bg-slate-100 p-2 flex flex-col border border-slate-200" : "bg-white p-2 flex flex-col border border-slate-200"}
           >
             {day && (
-              <span
-                className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
-                ${
-                  day === todayDay
-                    ? "bg-slate-900 text-white"
-                    : ""
-                }`}
-              >
-                {padn(day, 2)}
-              </span>
+              <Link to="/day" className="w-full h-full">
+                <span
+                  className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
+                  ${
+                    day === todayDay
+                      ? "bg-red-500 text-white"
+                      : ""
+                  }`}
+                >
+                  {padn(day, 2)}
+                </span>
+              </Link>
             )}
           </div>
         ))}
