@@ -1,21 +1,35 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
+import TimezoneSidebar from "./TimezoneSidebar"
 import { defaultTimezones } from "../data/timezones"
 import { mockMeetingsUTC } from "../data/meetings.day.mock"
-import { minutesFromLocalMidnight } from "../utils/timezone"
+
+import {
+  minutesFromMidnightInZone,
+  selectedDayUtcRange,
+  meetingOverlapsRange,
+} from "../utils/luxonTime"
+
+import { DateTime } from "luxon"
+import { BASE_TIMEZONE } from "../utils/constants"
 
 // ===== Pixel Math =====
 const HOURS = 24
 const PX_PER_HOUR = 120
-const PX_PER_SLOT = PX_PER_HOUR / 2 // 30-min slot
+const PX_PER_SLOT = PX_PER_HOUR / 2 // 30-min
 const TIMELINE_W = HOURS * PX_PER_HOUR // 2880px
+
+const SIDEBAR_W = 320
 const LABEL_COL_W = 220
 const RULER_H = 40
 const ROW_H = 88
 const ROW_LABEL_H = 28
 const ROW_TIMELINE_H = 60
 
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n))
+}
+
 function isoToDate(iso) {
-  // iso like "2026-02-24"
   const [y, m, d] = iso.split("-").map(Number)
   return new Date(y, m - 1, d)
 }
@@ -30,44 +44,77 @@ function formatFullDate(iso) {
   })
 }
 
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n))
+function hourLabelsForZone(selectedISO, tz) {
+  const start = DateTime.fromISO(selectedISO, { zone: tz }).startOf("day")
+  // 24 labels: 00:00, 01:00, ...
+  return Array.from({ length: 24 }, (_, i) => start.plus({ hours: i }).toFormat("HH:mm"))
 }
 
+function baseStartOfSelectedDay(selectedISO) {
+  return DateTime.fromISO(selectedISO, { zone: BASE_TIMEZONE }).startOf("day")
+}
+
+function labelsForRowFromBase(selectedISO, rowTz) {
+  const baseStart = baseStartOfSelectedDay(selectedISO)
+  return Array.from({ length: 24 }, (_, i) => {
+    const dt = baseStart.plus({ hours: i }).setZone(rowTz)
+    // If you want a tiny day hint when date differs:
+    const dayHint = dt.toFormat("dd") !== baseStart.toFormat("dd") ? dt.toFormat("dd LLL") : ""
+    return dt.toFormat("HH:mm")
+  })
+}
+
+
 export default function DayView({ selectedISO, onBackToMonth }) {
-  const timezones = defaultTimezones
+  const [timezones, setTimezones] = useState(defaultTimezones)
 
-  // "Now" line: we compute per timezone row (since local midnight differs).
-  const now = new Date()
+  const addTimezone = (tzObj) => {
+    if (timezones.some((t) => t.tz === tzObj.tz)) return
+    setTimezones((prev) => [...prev, tzObj])
+  }
 
-  // Precompute meeting blocks per timezone: x + w positions
+  const removeTimezone = (id) => {
+    setTimezones((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  const { startUtcMs, endUtcMs } = useMemo(
+    () => selectedDayUtcRange(selectedISO),
+    [selectedISO]
+  )
+
+  const meetingsForDay = useMemo(() => {
+    return mockMeetingsUTC.filter((m) => meetingOverlapsRange(m, startUtcMs, endUtcMs))
+  }, [startUtcMs, endUtcMs])
+
+  const nowUtcIso = new Date().toISOString()
+
   const meetingsByTz = useMemo(() => {
     const map = {}
     for (const tz of timezones) {
-      map[tz.id] = mockMeetingsUTC.map((m) => {
-        const start = new Date(m.startUtc)
-        const end = new Date(m.endUtc)
+      map[tz.id] = meetingsForDay.map((m) => {
+        const mStart = minutesFromMidnightInZone(m.startUtc, BASE_TIMEZONE)
+        const mEnd = minutesFromMidnightInZone(m.endUtc, BASE_TIMEZONE)
 
-        const mStart = minutesFromLocalMidnight(start, tz.tz)
-        const mEnd = minutesFromLocalMidnight(end, tz.tz)
-
-        // pixel positions
         const x = (mStart / 60) * PX_PER_HOUR
         const w = ((mEnd - mStart) / 60) * PX_PER_HOUR
 
-        // clamp inside day timeline (simple MVP handling)
         const xClamped = clamp(x, 0, TIMELINE_W)
         const wClamped = clamp(w, 0, TIMELINE_W - xClamped)
 
-        return {
-          ...m,
-          x: xClamped,
-          w: wClamped,
-        }
+        return { ...m, x: xClamped, w: wClamped }
       })
     }
     return map
-  }, [timezones])
+  }, [timezones, meetingsForDay])
+
+  const nowXByTz = useMemo(() => {
+    const map = {}
+    for (const tz of timezones) {
+      const nowMin = minutesFromMidnightInZone(nowUtcIso, BASE_TIMEZONE)
+      map[tz.id] = (nowMin / 60) * PX_PER_HOUR
+    }
+    return map
+  }, [timezones, nowUtcIso])
 
   return (
     <div className="h-full flex flex-col">
@@ -92,114 +139,143 @@ export default function DayView({ selectedISO, onBackToMonth }) {
         </div>
       </div>
 
-      {/* Ruler + rows */}
-      <div className="flex-1 overflow-hidden">
-        {/* Ruler row */}
-        <div className="h-10 border-b border-slate-200 flex">
-          <div className="w-[220px] bg-white" />
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
-            <div className="relative h-10" style={{ width: TIMELINE_W }}>
-              {/* hour ticks */}
-              {Array.from({ length: 25 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute top-0 bottom-0 border-l border-slate-200"
-                  style={{ left: i * PX_PER_HOUR }}
-                />
-              ))}
-              {/* labels */}
-              {Array.from({ length: 24 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute top-2 text-[11px] text-slate-500 select-none"
-                  style={{ left: i * PX_PER_HOUR + 4 }}
-                >
-                  {String(i).padStart(2, "0")}:00
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* Body: Sidebar + Timeline */}
+      <div className="flex-1 overflow-hidden grid" style={{ gridTemplateColumns: `${SIDEBAR_W}px 1fr` }}>
+        {/* Sidebar */}
+        <div className="border-r border-slate-200 bg-white">
+          <TimezoneSidebar
+            timezones={timezones}
+            onAdd={addTimezone}
+            onRemove={removeTimezone}
+          />
         </div>
 
-        {/* Rows area (vertical scroll) */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="flex">
-            {/* Left labels column */}
-            <div className="w-[220px] border-r border-slate-200 bg-white">
-              {/* Keep empty; labels are in each row for alignment */}
-            </div>
+        {/* Main timeline area */}
+        <div className="overflow-hidden bg-white">
+          {/* Vertical scroll container */}
+          <div className="h-full overflow-y-auto">
+            {/* Shared horizontal scroll container: ruler + rows (SYNCED) */}
+            <div className="overflow-x-auto">
+              {/* Inner width includes label column + timeline */}
+              <div style={{ width: LABEL_COL_W + TIMELINE_W }}>
+                {/* Ruler (sticky top) */}
+                <div
+                  className="sticky top-0 z-30 bg-white border-b border-slate-200"
+                  style={{ height: RULER_H }}
+                >
+                  <div className="relative" style={{ height: RULER_H }}>
+                    {/* Sticky label spacer */}
+                    <div
+                      className="sticky left-0 z-40 bg-white border-r border-slate-200"
+                      style={{ width: LABEL_COL_W, height: RULER_H }}
+                    />
 
-            {/* Right: horizontal scrolling container */}
-            <div className="flex-1 overflow-x-auto">
-              <div style={{ minWidth: TIMELINE_W }}>
-                {timezones.map((tz) => {
-                  const nowMin = minutesFromLocalMidnight(now, tz.tz)
-                  const nowX = (nowMin / 60) * PX_PER_HOUR
-
-                  return (
-                    <div key={tz.id} className="flex border-b border-slate-100">
-                      {/* Label cell (overlay aligned with left column) */}
-                      <div
-                        className="w-[220px] px-4 py-3 bg-white border-r border-slate-200"
-                        style={{ marginLeft: -LABEL_COL_W }}
-                      >
-                        <div className="text-sm font-medium leading-tight">
-                          {tz.label}
+                    {/* Hour ticks */}
+                    <div
+                      className="absolute top-0 bottom-0"
+                      style={{ left: LABEL_COL_W, width: TIMELINE_W }}
+                    >
+                      {Array.from({ length: 25 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="absolute top-0 bottom-0 border-l border-slate-200"
+                          style={{ left: i * PX_PER_HOUR }}
+                        />
+                      ))}
+                      {Array.from({ length: 24 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="absolute top-2 text-[11px] text-slate-500 select-none"
+                          style={{ left: i * PX_PER_HOUR + 4 }}
+                        >
+                          {String(i).padStart(2, "0")}:00
                         </div>
-                        <div className="text-xs text-slate-500">
-                          {tz.abbr} · UTC{tz.utc}
-                        </div>
-                      </div>
-
-                      {/* Timeline row */}
-                      <div
-                        className="relative"
-                        style={{ height: ROW_H, width: TIMELINE_W }}
-                      >
-                        {/* 30-min grid */}
-                        {Array.from({ length: 49 }).map((_, i) => (
-                          <div
-                            key={i}
-                            className="absolute top-[28px] bottom-0 border-l border-slate-100"
-                            style={{ left: i * PX_PER_SLOT }}
-                          />
-                        ))}
-
-                        {/* “working hours” shading placeholder (9–18 local) */}
-                        <div
-                          className="absolute top-[28px] h-[60px] bg-slate-50"
-                          style={{ left: 0, width: 9 * PX_PER_HOUR }}
-                        />
-                        <div
-                          className="absolute top-[28px] h-[60px] bg-white"
-                          style={{ left: 9 * PX_PER_HOUR, width: 9 * PX_PER_HOUR }}
-                        />
-                        <div
-                          className="absolute top-[28px] h-[60px] bg-slate-50"
-                          style={{ left: 18 * PX_PER_HOUR, width: 6 * PX_PER_HOUR }}
-                        />
-
-                        {/* Meeting blocks */}
-                        {meetingsByTz[tz.id].map((m) => (
-                          <div
-                            key={m.id}
-                            className="absolute top-[36px] h-[44px] rounded-xl bg-slate-900 text-white text-xs px-2 flex items-center shadow-sm"
-                            style={{ left: m.x, width: Math.max(12, m.w) }}
-                            title={`${m.title}`}
-                          >
-                            <span className="truncate">{m.title}</span>
-                          </div>
-                        ))}
-
-                        {/* Now line */}
-                        <div
-                          className="absolute top-0 bottom-0 w-px bg-red-500"
-                          style={{ left: clamp(nowX, 0, TIMELINE_W) }}
-                        />
-                      </div>
+                      ))}
                     </div>
-                  )
-                })}
+                  </div>
+                </div>
+
+                {/* Rows */}
+                <div>
+                  {timezones.map((tz) => {
+                    const nowX = nowXByTz[tz.id] ?? 0
+
+                    return (
+                      <div key={tz.id} className="border-b border-slate-100" style={{ height: ROW_H }}>
+                        <div className="relative h-full">
+                          {/* Sticky label column (TRUE sticky) */}
+                          <div
+                            className="sticky left-0 z-20 bg-white border-r border-slate-200 px-4 py-3"
+                            style={{ width: LABEL_COL_W, height: ROW_H }}
+                          >
+                            <div className="text-sm font-medium leading-tight">
+                              {tz.label}
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">
+                              {tz.tz}
+                            </div>
+                          </div>
+
+                          {/* Timeline lane */}
+                          <div
+                            className="absolute top-0 bottom-0"
+                            style={{ left: LABEL_COL_W, width: TIMELINE_W }}
+                          >
+                            {labelsForRowFromBase(selectedISO, tz.tz).map((label, i) => (
+                              <div
+                                key={i}
+                                className="absolute top-2 text-[11px] text-slate-400 select-none"
+                                style={{ left: i * PX_PER_HOUR + 4 }}
+                              >
+                                {label}
+                              </div>
+                            ))}
+                            {/* Working hours shading placeholder (9–18 local) */}
+                            <div
+                              className="absolute top-[28px] h-[60px] bg-slate-50"
+                              style={{ left: 0, width: 9 * PX_PER_HOUR }}
+                            />
+                            <div
+                              className="absolute top-[28px] h-[60px] bg-white"
+                              style={{ left: 9 * PX_PER_HOUR, width: 9 * PX_PER_HOUR }}
+                            />
+                            <div
+                              className="absolute top-[28px] h-[60px] bg-slate-50"
+                              style={{ left: 18 * PX_PER_HOUR, width: 6 * PX_PER_HOUR }}
+                            />
+
+                            {/* 30-min grid */}
+                            {Array.from({ length: 49 }).map((_, i) => (
+                              <div
+                                key={i}
+                                className="absolute top-[28px] bottom-0 border-l border-slate-100"
+                                style={{ left: i * PX_PER_SLOT }}
+                              />
+                            ))}
+
+                            {/* Meetings */}
+                            {(meetingsByTz[tz.id] ?? []).map((m) => (
+                              <div
+                                key={m.id}
+                                className="absolute top-[36px] h-[44px] rounded-xl bg-slate-900 text-white text-xs px-2 flex items-center shadow-sm"
+                                style={{ left: m.x, width: Math.max(12, m.w) }}
+                                title={m.title}
+                              >
+                                <span className="truncate">{m.title}</span>
+                              </div>
+                            ))}
+
+                            {/* Now line */}
+                            <div
+                              className="absolute top-0 bottom-0 w-px bg-red-500"
+                              style={{ left: clamp(nowX, 0, TIMELINE_W) }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>
