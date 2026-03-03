@@ -102,7 +102,7 @@ export default function Month() {
   );
 
   useEffect(() => {
-    reloadMeetings(false);
+    reloadMeetings(true);
   }, [reloadMeetings]);
 
   const monthLabel = useMemo(() => {

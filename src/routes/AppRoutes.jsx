@@ -7,6 +7,7 @@ import Cat from "../pages/Cat";
 import Test from "../pages/TestPage";
 import NotFound from "../pages/NotFound";
 import SignIn from "../pages/SignIn";
+import SetPassword from "../pages/SetPassword";
 import { useAuth } from "../auth/useAuth";
 
 function RequireAuth({ children }) {
@@ -28,6 +29,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/signin" element={<SignIn />} />
+      <Route path="/set-password" element={<SetPassword />} />
 
       <Route
         element={(

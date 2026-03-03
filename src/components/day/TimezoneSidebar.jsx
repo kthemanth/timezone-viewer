@@ -1,5 +1,10 @@
+import { DateTime } from "luxon";
 import { SINGAPORE_TZ } from "../../data/timezones";
-import { safeZoneLabel } from "../../utils/timezoneUtils";
+import { cityFromZone, gmtOffset } from "../../utils/timezoneUtils";
+
+function formatZoneDisplay(tz, now) {
+  return `${cityFromZone(tz)} (${gmtOffset(now, tz)})`;
+}
 
 export default function TimezoneSidebar({
   zones,
@@ -11,6 +16,15 @@ export default function TimezoneSidebar({
   onAddTimezone,
   onRemoveTimezone,
 }) {
+  const now = new Date();
+  const sortedOptions = optionsFiltered
+    .slice()
+    .sort(
+      (a, b) =>
+        DateTime.fromJSDate(now).setZone(a.id).offset -
+        DateTime.fromJSDate(now).setZone(b.id).offset
+    );
+
   return (
     <>
       <div className="flex items-center justify-between">
@@ -37,9 +51,9 @@ export default function TimezoneSidebar({
           {optionsFiltered.length === 0 ? (
             <option value="">No more to add</option>
           ) : (
-            optionsFiltered.map((o) => (
+            sortedOptions.map((o) => (
               <option key={o.id} value={o.id}>
-                {o.label}
+                {formatZoneDisplay(o.id, now)}
               </option>
             ))
           )}
@@ -58,7 +72,7 @@ export default function TimezoneSidebar({
         <div className="text-sm font-medium text-slate-700">Selected</div>
         <div className="mt-2 space-y-2">
           <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <div className="text-sm">{safeZoneLabel(SINGAPORE_TZ)}</div>
+            <div className="text-sm">{formatZoneDisplay(SINGAPORE_TZ, now)}</div>
             <span className="text-xs text-slate-500">Pinned</span>
           </div>
 
@@ -70,7 +84,7 @@ export default function TimezoneSidebar({
                 key={tz}
                 className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2"
               >
-                <div className="text-sm">{safeZoneLabel(tz)}</div>
+                <div className="text-sm">{formatZoneDisplay(tz, now)}</div>
                 <button
                   onClick={() => onRemoveTimezone(tz)}
                   className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"

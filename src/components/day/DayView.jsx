@@ -101,7 +101,7 @@ export default function DayView({ selectedDateISO }) {
   }, [zones]);
 
   useEffect(() => {
-    reloadMeetings(false);
+    reloadMeetings(true);
   }, [reloadMeetings]);
 
   useEffect(() => {

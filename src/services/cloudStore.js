@@ -1,4 +1,12 @@
 import { supabase } from "../utils/supabaseClient";
+import {
+  deriveAutoMeetingKey,
+  deriveMeetingKey,
+  decryptMeetingPayload,
+  encryptMeetingPayload,
+  isEncryptedMeetingRow,
+  meetingToEncryptedRow,
+} from "../utils/meetingCrypto";
 
 const MEETINGS_TTL_MS = 60_000;
 const CAT_TTL_MS = 60_000;
@@ -24,6 +32,49 @@ function mapMeetingRow(row) {
   };
 }
 
+async function decryptMeetingRow(row, cryptoKey) {
+  if (!isEncryptedMeetingRow(row)) {
+    return mapMeetingRow(row);
+  }
+
+  if (!cryptoKey) {
+    throw new Error("Meeting vault is locked. Unlock it to read encrypted meetings.");
+  }
+
+  const payload = await decryptMeetingPayload(row.title, cryptoKey);
+  return {
+    id: row.id,
+    title: payload.title,
+    startUtcISO: payload.startUtcISO,
+    endUtcISO: payload.endUtcISO,
+    location: payload.location ?? "",
+    notes: payload.notes ?? "",
+    color: payload.color ?? "#2563eb",
+  };
+}
+
+const legacyKeyCache = new Map();
+
+async function getLegacyMeetingKey(userId) {
+  if (!userId || typeof window === "undefined") return null;
+  if (legacyKeyCache.has(userId)) return legacyKeyCache.get(userId);
+
+  const passphrase = sessionStorage.getItem(`meeting_vault_passphrase_${userId}`);
+  if (!passphrase) {
+    legacyKeyCache.set(userId, null);
+    return null;
+  }
+
+  try {
+    const key = await deriveMeetingKey(passphrase, userId);
+    legacyKeyCache.set(userId, key);
+    return key;
+  } catch {
+    legacyKeyCache.set(userId, null);
+    return null;
+  }
+}
+
 function isFresh(ts, ttl) {
   return Date.now() - ts < ttl;
 }
@@ -47,8 +98,10 @@ export function invalidateMeetingsCache(userId) {
   meetingsCache.delete(userId);
 }
 
-export async function fetchMeetingsForUser(userId, { force = false } = {}) {
+export async function fetchMeetingsForUser(userId, { force = false, cryptoKey = null } = {}) {
   assertSupabase();
+  const effectiveKey = cryptoKey ?? (await deriveAutoMeetingKey(userId));
+  const legacyKey = await getLegacyMeetingKey(userId);
 
   const cached = !force ? readMeetingsCache(userId) : null;
   if (cached) return cached;
@@ -63,10 +116,25 @@ export async function fetchMeetingsForUser(userId, { force = false } = {}) {
     .from("meetings")
     .select("id,title,start_utc,end_utc,location,notes,color")
     .eq("user_id", userId)
-    .order("start_utc", { ascending: true });
+    .order("created_at", { ascending: true });
 
   if (error) throw error;
-    const rows = (data ?? []).map(mapMeetingRow);
+    const rows = (
+      await Promise.all(
+        (data ?? []).map(async (row) => {
+          try {
+            return await decryptMeetingRow(row, effectiveKey);
+          } catch {
+            if (!legacyKey) return null;
+            try {
+              return await decryptMeetingRow(row, legacyKey);
+            } catch {
+              return null;
+            }
+          }
+        })
+      )
+    ).filter(Boolean);
     writeMeetingsCache(userId, rows);
     return rows;
   })();
@@ -80,18 +148,22 @@ export async function fetchMeetingsForUser(userId, { force = false } = {}) {
   return inFlight;
 }
 
-export async function upsertMeetingForUser(userId, meeting) {
+export async function upsertMeetingForUser(userId, meeting, { cryptoKey = null } = {}) {
   assertSupabase();
+  const effectiveKey = cryptoKey ?? (await deriveAutoMeetingKey(userId));
+
+  const encryptedPayload = await encryptMeetingPayload(meeting, effectiveKey);
+  const encryptedRow = meetingToEncryptedRow(meeting, encryptedPayload);
 
   const payload = {
-    id: meeting.id,
+    id: encryptedRow.id,
     user_id: userId,
-    title: meeting.title,
-    start_utc: meeting.startUtcISO,
-    end_utc: meeting.endUtcISO,
-    location: meeting.location ?? "",
-    notes: meeting.notes ?? "",
-    color: meeting.color ?? "#2563eb",
+    title: encryptedRow.title,
+    start_utc: encryptedRow.startUtcISO,
+    end_utc: encryptedRow.endUtcISO,
+    location: encryptedRow.location,
+    notes: encryptedRow.notes,
+    color: encryptedRow.color,
   };
 
   const { data, error } = await supabase
@@ -101,7 +173,7 @@ export async function upsertMeetingForUser(userId, meeting) {
     .single();
 
   if (error) throw error;
-  const saved = mapMeetingRow(data);
+  const saved = await decryptMeetingRow(data, effectiveKey);
 
   const current = meetingsCache.get(userId)?.data ?? [];
   const next = current.some((m) => m.id === saved.id)
