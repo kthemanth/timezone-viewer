@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from "react-router-dom";
+import { Outlet, NavLink, useLocation } from "react-router-dom";
 
 function NavItem({ to, children }) {
   return (
@@ -18,10 +18,22 @@ function NavItem({ to, children }) {
 }
 
 export default function MainLayout() {
+  const { pathname } = useLocation();
+
+  // Pages that should use full-bleed width (like DayView)
+  const isFullBleed =
+    pathname.startsWith("/day") ||
+    pathname.startsWith("/test"); // because you're rendering DayView here
+
+  // Width behavior:
+  // - full bleed pages: no max width
+  // - normal pages: constrain to max-w-5xl
+  const shellClass = isFullBleed ? "w-full max-w-none" : "w-full max-w-5xl";
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 overflow-x-hidden flex flex-col">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <div className={`mx-auto ${shellClass} flex items-center justify-between px-4 py-3`}>
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-2xl bg-slate-900" />
             <span className="font-semibold">Quinn's Calendar</span>
@@ -31,16 +43,18 @@ export default function MainLayout() {
             <NavItem to="/">Month</NavItem>
             <NavItem to="/day">Today</NavItem>
             <NavItem to="/cat">Tigrou</NavItem>
+            <NavItem to="/test">Test Page</NavItem>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-8">
+      {/* Make sure main truly expands and doesn't inherit any max width unless we want it */}
+      <main className={`mx-auto ${shellClass} flex-1 px-4 py-6`}>
         <Outlet />
       </main>
 
       <footer className="border-t border-slate-200 bg-white">
-        <div className="mx-auto max-w-5xl px-4 py-6 text-sm text-slate-500">
+        <div className={`mx-auto ${shellClass} px-4 py-6 text-sm text-slate-500`}>
           © {new Date().getFullYear()} Quinn's Calendar
         </div>
       </footer>
