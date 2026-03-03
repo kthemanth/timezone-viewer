@@ -1,5 +1,5 @@
-import DayView from "../components/day/DayView";
+import Day from "./Day";
 
-export default function Test() {
-  return <DayView />;
+export default function TestPage() {
+  return <Day />;
 }

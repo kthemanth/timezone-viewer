@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import MainLayout from "../layouts/MainLayout";
 import Month from "../pages/Month";
@@ -6,24 +6,38 @@ import Day from "../pages/Day";
 import Cat from "../pages/Cat";
 import Test from "../pages/TestPage";
 import NotFound from "../pages/NotFound";
+import SignIn from "../pages/SignIn";
+import { useAuth } from "../auth/useAuth";
 
+function RequireAuth({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
 
-function todayISO() {
-  // local date in YYYY-MM-DD
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  if (loading) {
+    return <div className="min-h-screen grid place-items-center text-slate-600">Loading...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
+  }
+
+  return children;
 }
 
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route element={<MainLayout />}>
+      <Route path="/signin" element={<SignIn />} />
+
+      <Route
+        element={(
+          <RequireAuth>
+            <MainLayout />
+          </RequireAuth>
+        )}
+      >
         <Route path="/" element={<Month />} />
-        <Route path="/day" element={<Navigate to={`/day/${todayISO()}`} replace />} />
-        <Route path="/day/:iso" element={<Day />} />
+        <Route path="/day/:iso?" element={<Day />} />
         <Route path="/cat" element={<Cat />} />
         <Route path="/test" element={<Test />} />
         <Route path="*" element={<NotFound />} />

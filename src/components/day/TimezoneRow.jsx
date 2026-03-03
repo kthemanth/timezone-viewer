@@ -1,22 +1,30 @@
+import { DateTime } from "luxon";
 import {
-  buildHourLabels,
   cityFromZone,
   formatClock,
   formatDayHeader,
   gmtOffset,
-  minutesFromMidnightInZone,
 } from "../../utils/timezoneUtils";
 
 import TimelineGrid from "./TimelineGrid";
-import MeetingBlocks from "./MeetingBlocks";
+
+function buildAxisHourLabels(dayStartUtc, tz, use12h) {
+  return Array.from({ length: 24 }, (_, h) => {
+    const dt = dayStartUtc.plus({ hours: h }).setZone(tz);
+    return use12h ? dt.toFormat("ha").toLowerCase() : dt.toFormat("HH:00");
+  });
+}
+
+function xForInstant(dayStartUtc, instantUtc, pxPerHour) {
+  const mins = instantUtc.diff(dayStartUtc, "minutes").minutes;
+  return (mins / 60) * pxPerHour;
+}
 
 export default function TimezoneRow({
   tz,
   isPinned,
   now,
   use12h,
-  baseDay,
-  meetingsForDay,
   dayWindow,
   HOURS,
   PX_PER_HOUR,
@@ -24,9 +32,19 @@ export default function TimezoneRow({
   LABEL_COL_W,
   TIMELINE_W,
 }) {
-  const mins = minutesFromMidnightInZone(now, tz);
-  const nowX = (mins / 60) * PX_PER_HOUR;
-  const hourLabels = buildHourLabels(tz, use12h, baseDay);
+  const { dayStartUtc } = dayWindow;
+  const city = cityFromZone(tz);
+  const gmt = gmtOffset(now, tz);
+
+  // Labels reflect the SAME timeline (SG day), displayed in each zone’s local time
+  const hourLabels = buildAxisHourLabels(dayStartUtc, tz, use12h);
+
+  // Now line is positioned by "now" relative to SG-day start (shared axis)
+  const nowUtc = DateTime.fromJSDate(now).toUTC();
+  let nowX = xForInstant(dayStartUtc, nowUtc, PX_PER_HOUR);
+
+  // Clamp to visible 0..24h (optional)
+  nowX = Math.max(0, Math.min(TIMELINE_W, nowX));
 
   return (
     <div className="flex" style={{ minWidth: LABEL_COL_W + TIMELINE_W }}>
@@ -42,8 +60,7 @@ export default function TimezoneRow({
         <div className="h-full px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-between gap-1">
-              <div className="truncate text-sm font-semibold">{cityFromZone(tz)}</div>
-              <div className="text-xs font-mono opacity-70">{gmtOffset(now, tz)}</div>
+              <div className="truncate text-sm font-semibold">{`${city} (${gmt})`}</div>
             </div>
             {isPinned && (
               <span className="rounded-full bg-white/15 px-2 py-0.5 text-xs font-medium">
@@ -52,11 +69,17 @@ export default function TimezoneRow({
             )}
           </div>
 
-          <div className={isPinned ? "mt-1 text-sm text-white/75" : "mt-1 text-sm text-slate-600"}>
-            {formatDayHeader(now, tz)}
+          <div className={isPinned ? "mt-1 text-[13px] text-white/75" : "mt-1 text-[13px] text-slate-600"}>
+            {formatDayHeader(now, tz)} • {tz}
           </div>
 
-          <div className={isPinned ? "mt-2 font-mono text-sm tabular-nums text-white" : "mt-2 font-mono text-sm tabular-nums text-slate-900"}>
+          <div
+            className={
+              isPinned
+                ? "mt-2 font-mono text-lg tabular-nums text-white"
+                : "mt-2 font-mono text-lg tabular-nums text-slate-900"
+            }
+          >
             {formatClock(now, tz, use12h)}
           </div>
         </div>
@@ -66,26 +89,9 @@ export default function TimezoneRow({
       <div className="relative shrink-0 z-0" style={{ width: TIMELINE_W, height: ROW_H }}>
         <TimelineGrid HOURS={HOURS} PX_PER_HOUR={PX_PER_HOUR} hourLabels={hourLabels} />
 
-        <MeetingBlocks
-          tz={tz}
-          use12h={use12h}
-          meetingsForDay={meetingsForDay}
-          dayWindow={dayWindow}
-          PX_PER_HOUR={PX_PER_HOUR}
-        />
-
         {/* Now line */}
         <div className="absolute top-0 bottom-0" style={{ left: nowX }}>
           <div className="h-full w-[2px] bg-red-500" />
-          <div className="absolute top-2 left-2">
-            <div className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-              now
-            </div>
-          </div>
-        </div>
-
-        <div className="absolute left-0 right-0 bottom-3 px-4">
-          <div className="text-xs text-slate-500">(Meeting blocks go here later)</div>
         </div>
       </div>
     </div>

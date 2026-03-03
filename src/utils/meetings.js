@@ -81,7 +81,10 @@ export function buildMeetingFromForm(form) {
     hour: eh, minute: em, second: 0, millisecond: 0,
   });
 
-  if (endSg <= startSg) endSg = endSg.plus({ days: 1 });
+  if (endSg <= startSg) {
+    // invalid; caller should validate and block
+    return null;
+  }
 
   return {
     id: makeMeetingId(),
@@ -91,5 +94,76 @@ export function buildMeetingFromForm(form) {
     location: (form.location || "").trim(),
     notes: (form.notes || "").trim(),
     color: form.color || "#2563eb",
+  };
+}
+
+export function meetingToForm(meeting) {
+  const startSg = DateTime.fromISO(meeting.startUtcISO, { zone: "utc" }).setZone(SINGAPORE_TZ);
+  const endSg = DateTime.fromISO(meeting.endUtcISO, { zone: "utc" }).setZone(SINGAPORE_TZ);
+
+  return {
+    title: meeting.title ?? "",
+    dateISO: startSg.toISODate(),
+    startHHMM: startSg.toFormat("HH:mm"),
+    endHHMM: endSg.toFormat("HH:mm"),
+    location: meeting.location ?? "",
+    notes: meeting.notes ?? "",
+    color: meeting.color ?? "#2563eb",
+  };
+}
+
+export function updateMeetingFromForm(existingMeeting, form) {
+  const [sh, sm] = form.startHHMM.split(":").map((x) => parseInt(x, 10));
+  const [eh, em] = form.endHHMM.split(":").map((x) => parseInt(x, 10));
+
+  const startSg = DateTime.fromISO(form.dateISO, { zone: SINGAPORE_TZ }).set({
+    hour: sh,
+    minute: sm,
+    second: 0,
+    millisecond: 0,
+  });
+
+  const endSg = DateTime.fromISO(form.dateISO, { zone: SINGAPORE_TZ }).set({
+    hour: eh,
+    minute: em,
+    second: 0,
+    millisecond: 0,
+  });
+
+  if (endSg <= startSg) return null;
+
+  return {
+    ...existingMeeting,
+    title: form.title.trim(),
+    startUtcISO: startSg.toUTC().toISO(),
+    endUtcISO: endSg.toUTC().toISO(),
+    location: (form.location || "").trim(),
+    notes: (form.notes || "").trim(),
+    color: form.color || "#2563eb",
+  };
+}
+
+export function moveMeetingByMinutes(meeting, deltaMinutes) {
+  const startUtc = DateTime.fromISO(meeting.startUtcISO, { zone: "utc" }).plus({ minutes: deltaMinutes });
+  const endUtc = DateTime.fromISO(meeting.endUtcISO, { zone: "utc" }).plus({ minutes: deltaMinutes });
+
+  return {
+    ...meeting,
+    startUtcISO: startUtc.toISO(),
+    endUtcISO: endUtc.toISO(),
+  };
+}
+
+export function isoDateToSingaporeDate(isoDate) {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return DateTime.now().setZone(SINGAPORE_TZ);
+  return DateTime.fromISO(isoDate, { zone: SINGAPORE_TZ }).startOf("day");
+}
+
+export function getSingaporeDayWindowFromISO(isoDate) {
+  const daySG = isoDateToSingaporeDate(isoDate);
+  return {
+    daySG,
+    dayStartUtc: daySG.toUTC(),
+    dayEndUtc: daySG.plus({ days: 1 }).toUTC(),
   };
 }

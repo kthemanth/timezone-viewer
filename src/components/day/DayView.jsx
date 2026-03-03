@@ -1,18 +1,30 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DateTime } from "luxon";
 
 import { SINGAPORE_TZ, TIMEZONE_OPTIONS } from "../../data/timezones";
 import { loadJSON, saveJSON } from "../../utils/storage";
 import { minutesFromMidnightInZone } from "../../utils/timezoneUtils";
-import { getSingaporeDayWindow, meetingOverlapsDay, buildMeetingFromForm } from "../../utils/meetings";
+import {
+  meetingOverlapsDay,
+  buildMeetingFromForm,
+  getSingaporeDayWindowFromISO,
+  meetingToForm,
+  updateMeetingFromForm,
+  moveMeetingByMinutes,
+} from "../../utils/meetings";
 
 import TimezoneSidebar from "./TimezoneSidebar";
 import MeetingsPanel from "./MeetingsPanel";
 import TimezoneRow from "./TimezoneRow";
+import MeetingBands from "./MeetingBands";
+import { useAuth } from "../../auth/useAuth";
+import {
+  deleteMeetingForUser,
+  fetchMeetingsForUser,
+  upsertMeetingForUser,
+} from "../../services/cloudStore";
 
 const STORAGE_KEY_ZONES = "quinn_calendar_selected_timezones_v1";
-const STORAGE_KEY_MEETINGS = "quinn_calendar_meetings_v1";
-
 
 const HOURS = 24;
 const PX_PER_HOUR = 140;
@@ -26,36 +38,13 @@ function normalizeZones(raw) {
   return Array.from(new Set(cleaned));
 }
 
-function normalizeMeetings(raw) {
-  if (!Array.isArray(raw)) return [];
-  // minimal shape check
-  return raw
-    .filter(
-      (m) =>
-        m &&
-        typeof m.id === "string" &&
-        typeof m.title === "string" &&
-        typeof m.startUtcISO === "string" &&
-        typeof m.endUtcISO === "string"
-    )
-    .map((m) => ({
-      id: m.id,
-      title: m.title,
-      startUtcISO: m.startUtcISO,
-      endUtcISO: m.endUtcISO,
-      location: typeof m.location === "string" ? m.location : "",
-      notes: typeof m.notes === "string" ? m.notes : "",
-      color: typeof m.color === "string" ? m.color : "#2563eb",
-    }));
-}
-
-function defaultMeetingForm() {
-  const sg = DateTime.now().setZone(SINGAPORE_TZ);
-  const start = sg.plus({ minutes: 30 - (sg.minute % 30) }).set({ second: 0, millisecond: 0 });
+function defaultMeetingForm(dateISO) {
+  const day = DateTime.fromISO(dateISO, { zone: SINGAPORE_TZ });
+  const start = day.set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
   const end = start.plus({ minutes: 60 });
   return {
     title: "New meeting",
-    dateISO: sg.toISODate(),
+    dateISO,
     startHHMM: start.toFormat("HH:mm"),
     endHHMM: end.toFormat("HH:mm"),
     location: "",
@@ -64,50 +53,73 @@ function defaultMeetingForm() {
   };
 }
 
-export default function DayView() {
-  // zones
-  const [zones, setZones] = useState(() =>
-    normalizeZones(loadJSON(STORAGE_KEY_ZONES, []))
-  );
+function isEndAfterStart(form) {
+  const [sh, sm] = (form.startHHMM || "").split(":").map((x) => parseInt(x, 10));
+  const [eh, em] = (form.endHHMM || "").split(":").map((x) => parseInt(x, 10));
+  if ([sh, sm, eh, em].some((v) => Number.isNaN(v))) return false;
+  return eh * 60 + em > sh * 60 + sm;
+}
+
+export default function DayView({ selectedDateISO }) {
+  const { user } = useAuth();
+  const currentDayISO = selectedDateISO ?? DateTime.now().setZone(SINGAPORE_TZ).toISODate();
+
+  const [zones, setZones] = useState(() => normalizeZones(loadJSON(STORAGE_KEY_ZONES, [])));
+  const [meetingError, setMeetingError] = useState("");
+  const [editingMeetingId, setEditingMeetingId] = useState(null);
+  const [loadingMeetings, setLoadingMeetings] = useState(true);
 
   const [selectedToAdd, setSelectedToAdd] = useState(() => {
     return TIMEZONE_OPTIONS.find((t) => t.id !== SINGAPORE_TZ)?.id ?? "UTC";
   });
 
-  // meetings
-  const [meetings, setMeetings] = useState(() =>
-    normalizeMeetings(loadJSON(STORAGE_KEY_MEETINGS, []))
+  const [meetings, setMeetings] = useState([]);
+
+  const [now, setNow] = useState(() => new Date());
+  const [use12h, setUse12h] = useState(true);
+  const [meetingForm, setMeetingForm] = useState(() => defaultMeetingForm(currentDayISO));
+
+  const reloadMeetings = useCallback(
+    async (force = false) => {
+      if (!user?.id) return;
+      setLoadingMeetings(true);
+      setMeetingError("");
+      try {
+        const rows = await fetchMeetingsForUser(user.id, { force });
+        setMeetings(rows);
+      } catch (err) {
+        setMeetingError(err.message || "Failed to load meetings from Supabase.");
+      } finally {
+        setLoadingMeetings(false);
+      }
+    },
+    [user?.id]
   );
 
-  // UI state
-  const [now, setNow] = useState(() => new Date());
-  const [use12h, setUse12h] = useState(false);
-  const [meetingForm, setMeetingForm] = useState(() => defaultMeetingForm());
+  useEffect(() => {
+    saveJSON(STORAGE_KEY_ZONES, zones);
+  }, [zones]);
 
-  // anchor “day” for this view
-  const baseDay = useMemo(() => new Date(), []);
+  useEffect(() => {
+    reloadMeetings(false);
+  }, [reloadMeetings]);
 
-  // Persist
-  useEffect(() => saveJSON(STORAGE_KEY_ZONES, zones), [zones]);
-  useEffect(() => saveJSON(STORAGE_KEY_MEETINGS, meetings), [meetings]);
-
-  // Tick clock
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // Scroll-to-now on mount
   const scrollRef = useRef(null);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
 
-    const mins = minutesFromMidnightInZone(new Date(), SINGAPORE_TZ);
+    const isToday = currentDayISO === DateTime.now().setZone(SINGAPORE_TZ).toISODate();
+    const mins = isToday ? minutesFromMidnightInZone(new Date(), SINGAPORE_TZ) : 9 * 60;
     const x = (mins / 60) * PX_PER_HOUR;
     const target = Math.max(0, x - el.clientWidth / 2 + LABEL_COL_W);
     el.scrollLeft = target;
-  }, []);
+  }, [currentDayISO]);
 
   const allZones = useMemo(() => [SINGAPORE_TZ, ...zones], [zones]);
 
@@ -126,37 +138,130 @@ export default function DayView() {
     setZones((prev) => prev.filter((x) => x !== tz));
   }
 
-  const dayWindow = useMemo(() => getSingaporeDayWindow(baseDay), [baseDay]);
+  const dayWindow = useMemo(() => getSingaporeDayWindowFromISO(currentDayISO), [currentDayISO]);
+
   const meetingsForDay = useMemo(() => {
     const { dayStartUtc, dayEndUtc } = dayWindow;
-    return meetings.filter((m) => meetingOverlapsDay(m, dayStartUtc, dayEndUtc));
+    return meetings
+      .filter((m) => meetingOverlapsDay(m, dayStartUtc, dayEndUtc))
+      .sort((a, b) => a.startUtcISO.localeCompare(b.startUtcISO));
   }, [meetings, dayWindow]);
 
-  function addMeeting() {
-    const title = (meetingForm.title || "").trim();
-    if (!title) return;
-
-    const newMeeting = buildMeetingFromForm(meetingForm);
-    if (!newMeeting?.startUtcISO || !newMeeting?.endUtcISO) return;
-
-    setMeetings((prev) => [...prev, newMeeting]);
-
-    // nudge time forward for convenience
-    setMeetingForm((prev) => {
-      const startSg = DateTime.fromISO(prev.dateISO, { zone: SINGAPORE_TZ }).set({
-        hour: parseInt(prev.startHHMM.split(":")[0], 10),
-        minute: parseInt(prev.startHHMM.split(":")[1], 10),
-        second: 0,
-        millisecond: 0,
-      });
-      const nextStart = startSg.plus({ minutes: 60 });
-      const nextEnd = nextStart.plus({ minutes: 60 });
-      return { ...prev, startHHMM: nextStart.toFormat("HH:mm"), endHHMM: nextEnd.toFormat("HH:mm") };
-    });
+  function startCreateMeeting() {
+    setEditingMeetingId(null);
+    setMeetingError("");
+    setMeetingForm(defaultMeetingForm(currentDayISO));
   }
 
-  function deleteMeeting(id) {
+  function startEditMeeting(id) {
+    const target = meetings.find((m) => m.id === id);
+    if (!target) return;
+    setEditingMeetingId(id);
+    setMeetingError("");
+    setMeetingForm(meetingToForm(target));
+  }
+
+  async function persistMeetingUpdate(nextMeeting) {
+    if (!user?.id) return;
+    const saved = await upsertMeetingForUser(user.id, nextMeeting);
+    setMeetings((prev) => prev.map((m) => (m.id === saved.id ? saved : m)));
+  }
+
+  async function saveMeeting() {
+    setMeetingError("");
+
+    const title = (meetingForm.title || "").trim();
+    if (!title) {
+      setMeetingError("Please enter a meeting title.");
+      return;
+    }
+
+    if (!isEndAfterStart(meetingForm)) {
+      setMeetingError("End time must be later than start time.");
+      return;
+    }
+
+    try {
+      if (!editingMeetingId) {
+        const newMeeting = buildMeetingFromForm(meetingForm);
+        if (!newMeeting?.startUtcISO || !newMeeting?.endUtcISO) {
+          setMeetingError("Invalid meeting time.");
+          return;
+        }
+
+        setMeetings((prev) => [...prev, newMeeting]);
+        await persistMeetingUpdate(newMeeting);
+
+        setMeetingForm((prev) => {
+          const startSg = DateTime.fromISO(prev.dateISO, { zone: SINGAPORE_TZ }).set({
+            hour: parseInt(prev.startHHMM.split(":")[0], 10),
+            minute: parseInt(prev.startHHMM.split(":")[1], 10),
+            second: 0,
+            millisecond: 0,
+          });
+          const nextStart = startSg.plus({ minutes: 60 });
+          const nextEnd = nextStart.plus({ minutes: 60 });
+          return { ...prev, startHHMM: nextStart.toFormat("HH:mm"), endHHMM: nextEnd.toFormat("HH:mm") };
+        });
+        return;
+      }
+
+      const existing = meetings.find((m) => m.id === editingMeetingId);
+      if (!existing) return;
+
+      const updated = updateMeetingFromForm(existing, meetingForm);
+      if (!updated) {
+        setMeetingError("Invalid meeting time.");
+        return;
+      }
+
+      setMeetings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      await persistMeetingUpdate(updated);
+
+      setEditingMeetingId(null);
+      setMeetingForm(defaultMeetingForm(currentDayISO));
+    } catch (err) {
+      setMeetingError(err.message || "Failed to save meeting.");
+    }
+  }
+
+  async function deleteMeeting(id) {
+    const before = meetings;
     setMeetings((prev) => prev.filter((m) => m.id !== id));
+    try {
+      await deleteMeetingForUser(user.id, id);
+    } catch (err) {
+      setMeetings(before);
+      setMeetingError(err.message || "Failed to delete meeting.");
+    }
+
+    if (id === editingMeetingId) {
+      setEditingMeetingId(null);
+      setMeetingForm(defaultMeetingForm(currentDayISO));
+    }
+  }
+
+  function cancelEditMeeting() {
+    setEditingMeetingId(null);
+    setMeetingError("");
+    setMeetingForm(defaultMeetingForm(currentDayISO));
+  }
+
+  async function moveMeeting(id, deltaMinutes) {
+    if (!deltaMinutes) return;
+
+    const existing = meetings.find((m) => m.id === id);
+    if (!existing) return;
+
+    const moved = moveMeetingByMinutes(existing, deltaMinutes);
+    setMeetings((prev) => prev.map((m) => (m.id === id ? moved : m)));
+
+    try {
+      await persistMeetingUpdate(moved);
+    } catch (err) {
+      setMeetings((prev) => prev.map((m) => (m.id === id ? existing : m)));
+      setMeetingError(err.message || "Failed to move meeting.");
+    }
   }
 
   return (
@@ -179,9 +284,14 @@ export default function DayView() {
               use12h={use12h}
               meetingForm={meetingForm}
               setMeetingForm={setMeetingForm}
-              onAddMeeting={addMeeting}
+              onSaveMeeting={saveMeeting}
               meetingsForDay={meetingsForDay}
               onDeleteMeeting={deleteMeeting}
+              onEditMeeting={startEditMeeting}
+              onStartCreate={startCreateMeeting}
+              onCancelEdit={cancelEditMeeting}
+              editingMeetingId={editingMeetingId}
+              error={meetingError}
             />
           </div>
         </div>
@@ -193,40 +303,57 @@ export default function DayView() {
             <div>
               <h1 className="text-lg font-semibold">Day view</h1>
               <div className="text-sm text-slate-500">
-                Horizontal scroll compares hours. Vertical scroll shows more timezones.
+                {DateTime.fromISO(currentDayISO, { zone: SINGAPORE_TZ }).toFormat("cccc, dd LLL yyyy (SG)")}
               </div>
             </div>
-            <div className="text-sm text-slate-600">
-              Local now:{" "}
-              {new Intl.DateTimeFormat("en-GB", { timeStyle: "medium" }).format(now)}
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-slate-600">
+                {loadingMeetings ? "Loading meetings..." : `Local now: ${new Intl.DateTimeFormat("en-GB", { timeStyle: "medium" }).format(now)}`}
+              </div>
+              <button
+                type="button"
+                onClick={() => reloadMeetings(true)}
+                disabled={loadingMeetings}
+                className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Refresh
+              </button>
             </div>
           </div>
 
-          <div
-            ref={scrollRef}
-            className="flex-1 min-h-0 overflow-x-auto overflow-y-auto isolate"
-          >
-            <div className="divide-y divide-slate-200">
-              {allZones.map((tz, idx) => (
-                <TimezoneRow
-                  key={`${tz}-${idx}`}
-                  tz={tz}
-                  isPinned={tz === SINGAPORE_TZ}
-                  now={now}
-                  use12h={use12h}
-                  baseDay={baseDay}
-                  meetingsForDay={meetingsForDay}
-                  dayWindow={dayWindow}
-                  HOURS={HOURS}
-                  PX_PER_HOUR={PX_PER_HOUR}
-                  ROW_H={ROW_H}
-                  LABEL_COL_W={LABEL_COL_W}
-                  TIMELINE_W={TIMELINE_W}
-                />
-              ))}
-            </div>
+          <div ref={scrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-auto isolate">
+            <div className="relative" style={{ minWidth: LABEL_COL_W + TIMELINE_W }}>
+              <MeetingBands
+                meetingsForDay={meetingsForDay}
+                dayWindow={dayWindow}
+                rowCount={allZones.length}
+                ROW_H={ROW_H}
+                PX_PER_HOUR={PX_PER_HOUR}
+                LABEL_COL_W={LABEL_COL_W}
+                TIMELINE_W={TIMELINE_W}
+                use12h={use12h}
+                onEditMeeting={startEditMeeting}
+                onMoveMeeting={moveMeeting}
+              />
 
-            <div className="h-8" />
+              <div className="divide-y divide-slate-200">
+                {allZones.map((tz, idx) => (
+                  <TimezoneRow
+                    key={`${tz}-${idx}`}
+                    tz={tz}
+                    isPinned={tz === SINGAPORE_TZ}
+                    now={now}
+                    use12h={use12h}
+                    dayWindow={dayWindow}
+                    HOURS={HOURS}
+                    PX_PER_HOUR={PX_PER_HOUR}
+                    ROW_H={ROW_H}
+                    LABEL_COL_W={LABEL_COL_W}
+                    TIMELINE_W={TIMELINE_W}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>

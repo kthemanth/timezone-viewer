@@ -27,7 +27,7 @@ export default function TimelineGrid({ HOURS, PX_PER_HOUR, hourLabels }) {
         {hourLabels.map((label, h) => (
           <div
             key={h}
-            className="text-[11px] text-slate-500 px-2"
+            className="text-[13px] font-medium text-slate-600 px-2"
             style={{ width: PX_PER_HOUR }}
           >
             {label}

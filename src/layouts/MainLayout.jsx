@@ -1,4 +1,5 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "../auth/useAuth";
 
 function NavItem({ to, children }) {
   return (
@@ -19,15 +20,9 @@ function NavItem({ to, children }) {
 
 export default function MainLayout() {
   const { pathname } = useLocation();
+  const { user, signOut } = useAuth();
 
-  // Pages that should use full-bleed width (like DayView)
-  const isFullBleed =
-    pathname.startsWith("/day") ||
-    pathname.startsWith("/test"); // because you're rendering DayView here
-
-  // Width behavior:
-  // - full bleed pages: no max width
-  // - normal pages: constrain to max-w-5xl
+  const isFullBleed = pathname.startsWith("/day") || pathname.startsWith("/test");
   const shellClass = isFullBleed ? "w-full max-w-none" : "w-full max-w-5xl";
 
   return (
@@ -43,12 +38,18 @@ export default function MainLayout() {
             <NavItem to="/">Month</NavItem>
             <NavItem to="/day">Today</NavItem>
             <NavItem to="/cat">Tigrou</NavItem>
-            <NavItem to="/test">Test Page</NavItem>
+            <button
+              type="button"
+              onClick={signOut}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              title={user?.email ?? "Sign out"}
+            >
+              Sign out
+            </button>
           </nav>
         </div>
       </header>
 
-      {/* Make sure main truly expands and doesn't inherit any max width unless we want it */}
       <main className={`mx-auto ${shellClass} flex-1 px-4 py-6`}>
         <Outlet />
       </main>
