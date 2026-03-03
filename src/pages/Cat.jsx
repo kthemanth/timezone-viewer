@@ -283,18 +283,18 @@ export default function Cat() {
             <button
               type="button"
               onClick={showPrevImage}
-              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-2 py-1 text-sm font-semibold shadow"
+              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 text-sm text-slate-800"
               aria-label="Previous Tigrou photo"
             >
-              ‹
+              <FaArrowCircleLeft size={ICON_SIZE} />
             </button>
             <button
               type="button"
               onClick={showNextImage}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-2 py-1 text-sm font-semibold shadow"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 text-sm text-slate-800"
               aria-label="Next Tigrou photo"
             >
-              ›
+              <FaArrowCircleRight size={ICON_SIZE} />
             </button>
           </div>
 
