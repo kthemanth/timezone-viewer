@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { hasSupabaseConfig, supabase } from "../utils/supabaseClient";
 
@@ -118,6 +118,12 @@ export default function SignIn() {
         >
           Forgot password?
         </button>
+
+        <div className="mt-2">
+          <Link to="/change-password" className="text-sm text-slate-600 underline">
+            Change password
+          </Link>
+        </div>
       </div>
     </div>
   );

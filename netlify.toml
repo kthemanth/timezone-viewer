@@ -5,3 +5,8 @@
 [build.environment]
   # These are intentionally public in a Vite client bundle.
   SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_URL,VITE_SUPABASE_ANON_KEY,SUPABASE_PROJECT_ID"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
