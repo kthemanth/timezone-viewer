@@ -64,11 +64,15 @@ create table if not exists public.cat_activity (
   slept_hours numeric(4,1) not null default 0,
   played boolean not null default false,
   pooped boolean not null default false,
+  treats boolean not null default false,
   notes text not null default '',
   updated_by uuid references auth.users(id),
   updated_at timestamptz not null default now(),
   constraint cat_activity_sleep_check check (slept_hours >= 0 and slept_hours <= 24)
 );
+
+alter table public.cat_activity
+add column if not exists treats boolean not null default false;
 
 drop trigger if exists trg_cat_activity_updated_at on public.cat_activity;
 create trigger trg_cat_activity_updated_at

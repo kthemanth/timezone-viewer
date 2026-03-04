@@ -50,6 +50,7 @@ function emptyRow(dateISO) {
     sleptHours: 0,
     played: false,
     pooped: false,
+    treats: false,
     notes: "",
     updatedAt: new Date().toISOString(),
   };
@@ -73,11 +74,25 @@ function completedCount(row) {
   const sleptDone = (row?.sleptHours ?? 0) > 0;
   const playedDone = Boolean(row?.played);
   const poopedDone = Boolean(row?.pooped);
-  return [wetDone, dryDone, sleptDone, playedDone, poopedDone].filter(Boolean).length;
+  const treatsDone = Boolean(row?.treats);
+  return [wetDone, dryDone, sleptDone, playedDone, poopedDone, treatsDone].filter(Boolean).length;
 }
 
 function isFutureDay(iso, todayISO) {
   return iso > todayISO;
+}
+
+function cloneRow(row) {
+  return {
+    ...row,
+    wetFoodTimes: [...(row.wetFoodTimes ?? [])],
+    dryFoodTimes: [...(row.dryFoodTimes ?? [])],
+  };
+}
+
+function rowsEqual(a, b) {
+  if (!a || !b) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 export default function Cat() {
@@ -85,8 +100,11 @@ export default function Cat() {
   const todayISO = DateTime.now().setZone("Asia/Singapore").toISODate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
   const [selectedDateISO, setSelectedDateISO] = useState(todayISO);
+  const [draftRow, setDraftRow] = useState(() => emptyRow(todayISO));
 
   const [imageIndex, setImageIndex] = useState(0);
   const [imageFailed, setImageFailed] = useState(false);
@@ -121,8 +139,15 @@ export default function Cat() {
     return map;
   }, [rows]);
 
-  const selectedRow = rowsByDate.get(selectedDateISO) ?? emptyRow(selectedDateISO);
+  const persistedSelectedRow = rowsByDate.get(selectedDateISO) ?? emptyRow(selectedDateISO);
+  const selectedRow = draftRow ?? persistedSelectedRow;
   const selectedIsFuture = isFutureDay(selectedDateISO, todayISO);
+  const hasUnsavedChanges = !rowsEqual(selectedRow, persistedSelectedRow);
+
+  useEffect(() => {
+    setDraftRow(cloneRow(rowsByDate.get(selectedDateISO) ?? emptyRow(selectedDateISO)));
+    setStatus("");
+  }, [selectedDateISO, rowsByDate]);
 
   const monthLabel = useMemo(() => {
     const d = new Date(view.year, view.monthIndex, 1);
@@ -130,48 +155,30 @@ export default function Cat() {
   }, [view.year, view.monthIndex]);
 
   const cells = useMemo(() => buildMonthGrid(view.year, view.monthIndex, 0), [view.year, view.monthIndex]);
+  const effectiveRowsByDate = useMemo(() => {
+    const map = new Map(rowsByDate);
+    if (draftRow && draftRow.dateISO === selectedDateISO) {
+      map.set(selectedDateISO, draftRow);
+    }
+    return map;
+  }, [rowsByDate, draftRow, selectedDateISO]);
 
   const currentImage = TIGROU_IMAGES.length > 0 ? TIGROU_IMAGES[imageIndex % TIGROU_IMAGES.length] : null;
 
-  async function persistRow(dateISO, nextRow) {
-    if (!user?.id) return;
-    const saved = await upsertCatActivity(dateISO, nextRow, user.id);
-    setRows((prev) => {
-      const idx = prev.findIndex((row) => row.dateISO === dateISO);
-      if (idx < 0) return [...prev, saved];
-      const copy = prev.slice();
-      copy[idx] = saved;
-      return copy;
+  function updateDraft(updateFn) {
+    if (selectedIsFuture) return;
+    setDraftRow((prev) => {
+      const base = prev ?? cloneRow(persistedSelectedRow);
+      return {
+        ...base,
+        ...updateFn(base),
+        updatedAt: new Date().toISOString(),
+      };
     });
-  }
-
-  async function upsertRow(dateISO, updateFn) {
-    if (isFutureDay(dateISO, todayISO)) return;
-
-    const existing = rowsByDate.get(dateISO) ?? emptyRow(dateISO);
-    const next = {
-      ...existing,
-      ...updateFn(existing),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setRows((prev) => {
-      const idx = prev.findIndex((row) => row.dateISO === dateISO);
-      if (idx < 0) return [...prev, next];
-      const copy = prev.slice();
-      copy[idx] = next;
-      return copy;
-    });
-
-    try {
-      await persistRow(dateISO, next);
-    } catch (err) {
-      setError(err.message || "Failed to save cat activity.");
-    }
   }
 
   function setMealTimes(type, times) {
-    upsertRow(selectedDateISO, () => ({ [type]: sanitizeTimes(times) }));
+    updateDraft(() => ({ [type]: sanitizeTimes(times) }));
   }
 
   function addMealTime(type) {
@@ -195,15 +202,44 @@ export default function Cat() {
   }
 
   function setSleptHours(value) {
-    upsertRow(selectedDateISO, () => ({ sleptHours: Math.max(0, Math.min(24, value)) }));
+    updateDraft(() => ({ sleptHours: Math.max(0, Math.min(24, value)) }));
   }
 
   function toggleFlag(key) {
-    upsertRow(selectedDateISO, (existing) => ({ [key]: !existing[key] }));
+    updateDraft((existing) => ({ [key]: !existing[key] }));
   }
 
   function updateNotes(nextNotes) {
-    upsertRow(selectedDateISO, () => ({ notes: nextNotes }));
+    updateDraft(() => ({ notes: nextNotes }));
+  }
+
+  async function saveSelectedDay() {
+    if (selectedIsFuture || !user?.id || !draftRow) return;
+
+    setSaving(true);
+    setError("");
+    setStatus("");
+    try {
+      const saved = await upsertCatActivity(selectedDateISO, draftRow, user.id);
+      setRows((prev) => {
+        const idx = prev.findIndex((row) => row.dateISO === selectedDateISO);
+        if (idx < 0) return [...prev, saved];
+        const copy = prev.slice();
+        copy[idx] = saved;
+        return copy;
+      });
+      setDraftRow(cloneRow(saved));
+      setStatus("Saved.");
+    } catch (err) {
+      setError(err.message || "Failed to save cat activity.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function discardDraft() {
+    setDraftRow(cloneRow(persistedSelectedRow));
+    setStatus("");
   }
 
   function prevMonth() {
@@ -248,14 +284,32 @@ export default function Cat() {
           <div className="text-sm text-slate-500">
             Editing: {DateTime.fromISO(selectedDateISO).toFormat("cccc, dd LLL yyyy")}
           </div>
-          <button
-            type="button"
-            onClick={() => reloadActivity(true)}
-            disabled={loading}
-            className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => reloadActivity(true)}
+              disabled={loading || saving}
+              className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={saveSelectedDay}
+              disabled={selectedIsFuture || saving || !hasUnsavedChanges}
+              className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={discardDraft}
+              disabled={selectedIsFuture || saving || !hasUnsavedChanges}
+              className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Discard
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-3">
@@ -336,8 +390,8 @@ export default function Cat() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            {["played", "pooped"].map((key) => {
+          <div className="grid grid-cols-3 gap-2">
+            {["played", "pooped", "treats"].map((key) => {
               const active = Boolean(selectedRow[key]);
               return (
                 <button
@@ -352,7 +406,7 @@ export default function Cat() {
                   ].join(" ")}
                 >
                   {active ? "✓ " : "○ "}
-                  {key === "played" ? "Played" : "Pooped"}
+                  {key === "played" ? "Played" : key === "pooped" ? "Pooped" : "Treats"}
                 </button>
               );
             })}
@@ -374,6 +428,10 @@ export default function Cat() {
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               Future dates are read-only. You can edit only past and current days.
             </div>
+          ) : null}
+
+          {status ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{status}</div>
           ) : null}
 
           {error ? (
@@ -420,7 +478,7 @@ export default function Cat() {
 
         <div className="mt-2 grid grid-cols-7 rounded-2xl border border-slate-200">
           {cells.map((cell) => {
-            const row = rowsByDate.get(cell.iso) ?? emptyRow(cell.iso);
+            const row = effectiveRowsByDate.get(cell.iso) ?? emptyRow(cell.iso);
             const done = completedCount(row);
             const isOut = !cell.inMonth;
             const future = isFutureDay(cell.iso, todayISO);
@@ -449,10 +507,10 @@ export default function Cat() {
                     <div
                       className={[
                         "rounded-full px-2 py-0.5 text-[10px] font-semibold text-white",
-                        done === 5 ? "bg-emerald-600" : done >= 3 ? "bg-amber-500" : "bg-slate-700",
+                        done === 6 ? "bg-emerald-600" : done >= 4 ? "bg-amber-500" : "bg-slate-700",
                       ].join(" ")}
                     >
-                      {done}/5
+                      {done}/6
                     </div>
                   ) : null}
                 </div>
@@ -468,6 +526,7 @@ export default function Cat() {
                     <div className="flex gap-1">
                       <StatusDot active={row.played} label="Played" />
                       <StatusDot active={row.pooped} label="Pooped" />
+                      <StatusDot active={row.treats} label="Treats" />
                       <StatusDot active={row.sleptHours > 0} label="Slept" />
                     </div>
                   </div>
@@ -480,7 +539,7 @@ export default function Cat() {
                         {DateTime.fromISO(cell.iso).toFormat("dd LLL yyyy")}
                       </div>
                       <div className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white">
-                        {done}/5
+                        {done}/6
                       </div>
                     </div>
 
@@ -490,6 +549,7 @@ export default function Cat() {
                       <MetricChip label="Sleep" value={`${row.sleptHours}h`} success={row.sleptHours > 0} />
                       <MetricChip label="Played" value={row.played ? "Yes" : "No"} success={row.played} />
                       <MetricChip label="Pooped" value={row.pooped ? "Yes" : "No"} success={row.pooped} />
+                      <MetricChip label="Treats" value={row.treats ? "Yes" : "No"} success={row.treats} />
                       <MetricChip label="Meals" value={`${meals}/4`} success={meals >= 2} />
                     </div>
 

@@ -214,6 +214,7 @@ function mapCatRow(row) {
     sleptHours: typeof row.slept_hours === "number" ? row.slept_hours : Number(row.slept_hours ?? 0),
     played: Boolean(row.played),
     pooped: Boolean(row.pooped),
+    treats: Boolean(row.treats),
     notes: row.notes ?? "",
     updatedAt: row.updated_at,
   };
@@ -248,13 +249,17 @@ export async function fetchCatActivity({ force = false } = {}) {
   }
 
   const inFlight = (async () => {
-  const { data, error } = await supabase
-    .from("cat_activity")
-    .select("date,wet_food_times,dry_food_times,slept_hours,played,pooped,notes,updated_at")
-    .order("date", { ascending: true });
+    const withTreatsSelect = "date,wet_food_times,dry_food_times,slept_hours,played,pooped,treats,notes,updated_at";
+    const withoutTreatsSelect = "date,wet_food_times,dry_food_times,slept_hours,played,pooped,notes,updated_at";
 
-  if (error) throw error;
-    const rows = (data ?? []).map(mapCatRow);
+    let query = await supabase.from("cat_activity").select(withTreatsSelect).order("date", { ascending: true });
+    if (query.error && String(query.error.message || "").toLowerCase().includes("treats")) {
+      query = await supabase.from("cat_activity").select(withoutTreatsSelect).order("date", { ascending: true });
+    }
+
+    if (query.error) throw query.error;
+
+    const rows = (query.data ?? []).map(mapCatRow);
     writeCatCache(rows);
     return rows;
   })();
@@ -273,18 +278,29 @@ export async function upsertCatActivity(dateISO, row, userId) {
     slept_hours: row.sleptHours,
     played: row.played,
     pooped: row.pooped,
+    treats: row.treats,
     notes: row.notes ?? "",
     updated_by: userId,
   };
 
-  const { data, error } = await supabase
+  let query = await supabase
     .from("cat_activity")
     .upsert(payload, { onConflict: "date" })
-    .select("date,wet_food_times,dry_food_times,slept_hours,played,pooped,notes,updated_at")
+    .select("date,wet_food_times,dry_food_times,slept_hours,played,pooped,treats,notes,updated_at")
     .single();
 
-  if (error) throw error;
-  const saved = mapCatRow(data);
+  if (query.error && String(query.error.message || "").toLowerCase().includes("treats")) {
+    const fallbackPayload = { ...payload };
+    delete fallbackPayload.treats;
+    query = await supabase
+      .from("cat_activity")
+      .upsert(fallbackPayload, { onConflict: "date" })
+      .select("date,wet_food_times,dry_food_times,slept_hours,played,pooped,notes,updated_at")
+      .single();
+  }
+
+  if (query.error) throw query.error;
+  const saved = mapCatRow(query.data);
   const current = catCache.data ?? [];
   const next = current.some((row) => row.dateISO === saved.dateISO)
     ? current.map((row) => (row.dateISO === saved.dateISO ? saved : row))

@@ -24,13 +24,11 @@
 }
 
 :root {
-  /* Use system font stack, clean and readable */
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+  font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
     Arial, "Apple Color Emoji", "Segoe UI Emoji";
   line-height: 1.5;
   font-weight: 400;
 
-  /* Force a consistent light UI for now */
   color-scheme: light;
 
   text-rendering: optimizeLegibility;
@@ -46,9 +44,8 @@ body,
 
 body {
   margin: 0;
-  /* Let your App layout control everything */
-  background: #f8fafc; /* slate-50 */
-  color: #0f172a;      /* slate-900 */
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 /* Make media elements behave nicely by default */
