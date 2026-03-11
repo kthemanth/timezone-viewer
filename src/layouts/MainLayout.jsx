@@ -35,7 +35,7 @@ export default function MainLayout() {
           <img
             src={logo}
             alt="Quinn's Calendar"
-            className="h-9 w-9 object-contain"
+            className="h-12 w-12 object-contain"
           />
             <span className="font-semibold">Quinn's Calendar</span>
           </div>
