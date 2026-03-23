@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
-import { hasSupabaseConfig, supabase } from "../utils/supabaseClient";
+import { supabase } from "../utils/supabaseClient";
+import { GlassInput, GlassButton, GlassBadge } from "../components/ui";
 
 export default function SignIn() {
   const { user, loading } = useAuth();
@@ -11,6 +12,7 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (loading) {
     return <div className="min-h-screen grid place-items-center text-slate-600">Loading...</div>;
@@ -62,69 +64,77 @@ export default function SignIn() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 grid place-items-center p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-bold text-slate-900">Quinn's Calendar</h1>
-        <p className="mt-1 text-sm text-slate-500">Invite-only access. Contact admin if you need an account.</p>
+    <div
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden font-sans"
+      style={{ background: '#06061a' }}
+    >
+      {/* Ambient orbs */}
+      <div className="pointer-events-none absolute -top-20 -left-10 w-[280px] h-[280px]" style={{ background: 'radial-gradient(ellipse,rgba(99,102,241,0.18) 0%,transparent 65%)', borderRadius: '50%' }} />
+      <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[200px]" style={{ background: 'radial-gradient(ellipse,rgba(139,92,246,0.07) 0%,transparent 70%)', borderRadius: '50%' }} />
+      <div className="pointer-events-none absolute -bottom-16 -right-10 w-[260px] h-[260px]" style={{ background: 'radial-gradient(ellipse,rgba(217,70,239,0.12) 0%,transparent 65%)', borderRadius: '50%' }} />
 
-        {!hasSupabaseConfig ? (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            Missing Supabase env. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-          </div>
-        ) : null}
+      {/* Grid texture */}
+      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: 'linear-gradient(rgba(99,102,241,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.03) 1px,transparent 1px)', backgroundSize: '32px 32px' }} />
 
-        <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
+      {/* Glass card */}
+      <div
+        className="relative z-10 w-full max-w-sm rounded-[20px] p-8"
+        style={{ background: 'rgba(13,13,43,0.8)', border: '1px solid rgba(99,102,241,0.22)', backdropFilter: 'blur(24px)', boxShadow: '0 0 60px rgba(99,102,241,0.08),0 24px 48px rgba(0,0,0,0.4)' }}
+      >
+        {/* Logo */}
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 rounded-[14px] inline-flex items-center justify-center text-2xl mb-3" style={{ background: 'linear-gradient(135deg,#6366f1,#a855f7)', boxShadow: '0 0 24px rgba(99,102,241,0.5)' }}>🌏</div>
+          <div className="text-lg font-extrabold text-slate-100 tracking-tight">Quinn&apos;s Calendar</div>
+          <div className="text-[11px] text-slate-600 mt-0.5 font-medium">Invite-only · Encrypted</div>
+        </div>
 
-          <div>
-            <label className="text-sm font-medium text-slate-700">Password</label>
-            <input
-              type="password"
-              required
-              minLength={6}
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <GlassInput
+            label="Email"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
+            required
+          />
+          <div className="relative">
+            <GlassInput
+              label="Password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              className="absolute right-3 top-[30px] text-slate-600 hover:text-slate-400 transition-colors text-sm"
+              tabIndex={-1}
+            >
+              {showPassword ? '🙈' : '👁'}
+            </button>
           </div>
 
-          {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
-          ) : null}
+          {error && <GlassBadge variant="error" className="self-start">{error}</GlassBadge>}
 
-          <button
-            type="submit"
-            disabled={busy || !hasSupabaseConfig}
-            className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {busy ? "Please wait..." : "Sign in"}
-          </button>
+          <GlassButton type="submit" variant="primary" disabled={busy} className="w-full mt-1">
+            {busy ? 'Signing in…' : 'Sign in →'}
+          </GlassButton>
         </form>
 
-        <button
-          type="button"
-          onClick={sendResetLink}
-          disabled={busy || !hasSupabaseConfig}
-          className="mt-3 text-sm text-slate-600 underline disabled:opacity-50"
-        >
-          Forgot password?
-        </button>
-
-        <div className="mt-2">
-          <Link to="/change-password" className="text-sm text-slate-600 underline">
-            Change password
-          </Link>
+        {/* Footer links */}
+        <div className="flex justify-between mt-4">
+          <button type="button" onClick={sendResetLink} className="text-[11px] text-slate-600 hover:text-indigo-400 transition-colors">Forgot password?</button>
+          <button type="button" onClick={() => navigate('/change-password')} className="text-[11px] text-slate-600 hover:text-indigo-400 transition-colors">Change password</button>
         </div>
+
+        {/* Bottom glow */}
+        <div className="absolute bottom-0 left-[20%] right-[20%] h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(99,102,241,0.5),rgba(217,70,239,0.5),transparent)', borderRadius: 1 }} />
       </div>
     </div>
-  );
+  )
 }

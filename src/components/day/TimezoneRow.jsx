@@ -36,7 +36,11 @@ export default function TimezoneRow({
   const city = cityFromZone(tz);
   const gmt = gmtOffset(now, tz);
 
-  // Labels reflect the SAME timeline (SG day), displayed in each zone’s local time
+  // Night dimming detection
+  const localHour = DateTime.now().setZone(tz).hour;
+  const isNight = localHour < 6 || localHour >= 23;
+
+  // Labels reflect the SAME timeline (SG day), displayed in each zone's local time
   const hourLabels = buildAxisHourLabels(dayStartUtc, tz, use12h);
 
   // Now line is positioned by "now" relative to SG-day start (shared axis)
@@ -46,8 +50,38 @@ export default function TimezoneRow({
   // Clamp to visible 0..24h (optional)
   nowX = Math.max(0, Math.min(TIMELINE_W, nowX));
 
+  // Current column index for TimelineGrid highlight (offset from dayStartUtc)
+  const currentHourIndex = Math.floor(nowUtc.diff(dayStartUtc, "hours").hours);
+
+  // Row background classes
+  const rowBg = [
+    isPinned ? "bg-indigo-500/[0.03]" : "",
+    isNight ? "bg-black/[0.15]" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="flex" style={{ minWidth: LABEL_COL_W + TIMELINE_W }}>
+    <div
+      className={`flex relative border-b border-white/[0.04] ${rowBg}`}
+      style={{ minWidth: LABEL_COL_W + TIMELINE_W }}
+    >
+      {/* Ghost time watermark */}
+      <div
+        className="pointer-events-none select-none absolute right-2 top-1/2 -translate-y-1/2"
+        style={{
+          fontFamily: "JetBrains Mono, monospace",
+          fontSize: 18,
+          fontWeight: 700,
+          color: isPinned
+            ? "rgba(99,102,241,0.25)"
+            : "rgba(255,255,255,0.06)",
+          zIndex: 1,
+        }}
+      >
+        {DateTime.now().setZone(tz).toFormat("HH:mm")}
+      </div>
+
       {/* Sticky timezone label */}
       <div
         className={[
@@ -87,7 +121,12 @@ export default function TimezoneRow({
 
       {/* Timeline */}
       <div className="relative shrink-0 z-0" style={{ width: TIMELINE_W, height: ROW_H }}>
-        <TimelineGrid HOURS={HOURS} PX_PER_HOUR={PX_PER_HOUR} hourLabels={hourLabels} />
+        <TimelineGrid
+          HOURS={HOURS}
+          PX_PER_HOUR={PX_PER_HOUR}
+          hourLabels={hourLabels}
+          currentHourIndex={currentHourIndex}
+        />
 
         {/* Now line */}
         <div className="absolute top-0 bottom-0" style={{ left: nowX }}>

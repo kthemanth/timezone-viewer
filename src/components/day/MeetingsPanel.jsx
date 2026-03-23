@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import { SINGAPORE_TZ } from "../../data/timezones";
+import { GlassCard, GlassInput, GlassButton } from "../ui";
 
 export default function MeetingsPanel({
   use12h,
@@ -15,57 +16,61 @@ export default function MeetingsPanel({
   error,
 }) {
   return (
-    <>
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold text-slate-900">Meetings</div>
-        <div className="text-xs text-slate-500">Saved</div>
+    <div
+      className="h-full overflow-y-auto"
+      style={{ background: "rgba(8,8,28,0.92)", padding: "14px" }}
+    >
+      {/* Section label */}
+      <div className="text-[10px] font-bold text-slate-700 uppercase tracking-[0.08em] mb-2.5">
+        {editingMeetingId ? "Edit Meeting" : "New Meeting"}
       </div>
 
-      <div className="mt-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-slate-700">Title</label>
+      {/* Form */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between mb-1">
           {editingMeetingId ? (
-            <button
+            <GlassButton
               type="button"
+              variant="ghost"
               onClick={onCancelEdit}
-              className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+              className="text-xs px-2 py-1"
             >
               Cancel edit
-            </button>
+            </GlassButton>
           ) : (
-            <button
+            <GlassButton
               type="button"
+              variant="ghost"
               onClick={onStartCreate}
-              className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+              className="text-xs px-2 py-1"
             >
               Reset form
-            </button>
+            </GlassButton>
           )}
         </div>
 
-        <input
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+        <GlassInput
+          label="Title"
           value={meetingForm.title}
           onChange={(e) => setMeetingForm((p) => ({ ...p, title: e.target.value }))}
           placeholder="e.g. Client sync"
         />
 
         <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-700">Date (SG)</label>
-            <input
-              type="date"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
-              value={meetingForm.dateISO}
-              onChange={(e) => setMeetingForm((p) => ({ ...p, dateISO: e.target.value }))}
-            />
-          </div>
+          <GlassInput
+            label="Date (SG)"
+            type="date"
+            value={meetingForm.dateISO}
+            onChange={(e) => setMeetingForm((p) => ({ ...p, dateISO: e.target.value }))}
+          />
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-700">Color</label>
+          <div className="flex flex-col gap-[5px]">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.07em]">
+              Color
+            </label>
             <input
               type="color"
-              className="h-[38px] w-full rounded-xl border border-slate-200 bg-white px-2 py-1"
+              className="h-[38px] w-full rounded-[10px] border border-white/10 bg-white/[0.04] px-2 py-1"
               value={meetingForm.color}
               onChange={(e) => setMeetingForm((p) => ({ ...p, color: e.target.value }))}
               aria-label="Pick meeting color"
@@ -74,125 +79,161 @@ export default function MeetingsPanel({
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-700">Start (SG)</label>
-            <input
-              type="time"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
-              value={meetingForm.startHHMM}
-              onChange={(e) => setMeetingForm((p) => ({ ...p, startHHMM: e.target.value }))}
-            />
-          </div>
+          <GlassInput
+            label="Start (SG)"
+            type="time"
+            value={meetingForm.startHHMM}
+            onChange={(e) => setMeetingForm((p) => ({ ...p, startHHMM: e.target.value }))}
+          />
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-700">End (SG)</label>
-            <input
-              type="time"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
-              value={meetingForm.endHHMM}
-              onChange={(e) => setMeetingForm((p) => ({ ...p, endHHMM: e.target.value }))}
-            />
-          </div>
+          <GlassInput
+            label="End (SG)"
+            type="time"
+            value={meetingForm.endHHMM}
+            onChange={(e) => setMeetingForm((p) => ({ ...p, endHHMM: e.target.value }))}
+          />
         </div>
 
-        <label className="text-sm font-medium text-slate-700">Location</label>
-        <input
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+        <GlassInput
+          label="Location"
           value={meetingForm.location}
           onChange={(e) => setMeetingForm((p) => ({ ...p, location: e.target.value }))}
           placeholder="e.g. Zoom / Office / Client site"
         />
 
-        <label className="text-sm font-medium text-slate-700">Notes (optional)</label>
-        <textarea
-          rows={2}
-          className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
-          value={meetingForm.notes}
-          onChange={(e) => setMeetingForm((p) => ({ ...p, notes: e.target.value }))}
-          placeholder="Anything important..."
-        />
+        <div className="flex flex-col gap-[5px]">
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.07em]">
+            Notes (optional)
+          </label>
+          <textarea
+            rows={2}
+            className="
+              w-full resize-none rounded-[10px] px-3 py-[9px] text-sm text-slate-100
+              bg-white/[0.04] border border-white/10
+              placeholder:text-slate-600
+              focus:outline-none focus:border-indigo-500/50 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.15)]
+              transition-all duration-200
+            "
+            value={meetingForm.notes}
+            onChange={(e) => setMeetingForm((p) => ({ ...p, notes: e.target.value }))}
+            placeholder="Anything important..."
+          />
+        </div>
 
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
             {error}
           </div>
         ) : null}
 
-        <button
+        <GlassButton
+          variant="primary"
           onClick={onSaveMeeting}
-          className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+          className="w-full"
         >
           {editingMeetingId ? "Save meeting" : "Add meeting"}
-        </button>
+        </GlassButton>
+      </div>
 
-        <div className="pt-2">
-          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-            Meetings on selected day (SG)
-          </div>
+      {/* Meetings list section */}
+      <div className="mt-5">
+        <div className="text-[10px] font-bold text-slate-700 uppercase tracking-[0.08em] mb-2.5">
+          Meetings on selected day (SG)
+        </div>
 
-          {meetingsForDay.length === 0 ? (
-            <div className="mt-2 text-sm text-slate-500">No meetings yet.</div>
-          ) : (
-            <div className="mt-2 space-y-2">
-              {meetingsForDay.map((m) => {
-                const sSG = DateTime.fromISO(m.startUtcISO, { zone: "utc" }).setZone(SINGAPORE_TZ);
-                const eSG = DateTime.fromISO(m.endUtcISO, { zone: "utc" }).setZone(SINGAPORE_TZ);
+        {meetingsForDay.length === 0 ? (
+          <>
+            <p
+              className="text-[10px] text-slate-700 rounded-lg p-2.5 mt-2"
+              style={{ background: "rgba(255,255,255,0.02)" }}
+            >
+              Click &amp; drag on the timeline to select a time
+            </p>
+            {/* + New Meeting dashed card */}
+            <div
+              className="border border-dashed border-indigo-500/25 rounded-xl p-3 text-center text-[11px] font-semibold text-slate-600 hover:border-indigo-500/40 hover:text-slate-400 transition-all cursor-pointer mt-2"
+              onClick={onStartCreate}
+            >
+              + New Meeting
+            </div>
+          </>
+        ) : (
+          <div className="space-y-2">
+            {meetingsForDay.map((m) => {
+              const sSG = DateTime.fromISO(m.startUtcISO, { zone: "utc" }).setZone(SINGAPORE_TZ);
+              const eSG = DateTime.fromISO(m.endUtcISO, { zone: "utc" }).setZone(SINGAPORE_TZ);
 
-                const timeTxt = use12h
-                  ? `${sSG.toFormat("h:mm a")}–${eSG.toFormat("h:mm a")}`
-                  : `${sSG.toFormat("HH:mm")}–${eSG.toFormat("HH:mm")}`;
+              const timeTxt = use12h
+                ? `${sSG.toFormat("h:mm a")}–${eSG.toFormat("h:mm a")}`
+                : `${sSG.toFormat("HH:mm")}–${eSG.toFormat("HH:mm")}`;
 
-                const isEditingThis = editingMeetingId === m.id;
+              const isEditingThis = editingMeetingId === m.id;
+              const meetingColor = m.color || "#6366f1";
 
-                return (
-                  <div
-                    key={m.id}
-                    className={[
-                      "flex items-start justify-between gap-2 rounded-xl border bg-white px-3 py-2",
-                      isEditingThis ? "border-slate-400" : "border-slate-200",
-                    ].join(" ")}
-                  >
+              return (
+                <GlassCard
+                  key={m.id}
+                  level={2}
+                  hover={true}
+                  className={`p-3 mb-2 cursor-pointer${isEditingThis ? " border-indigo-400/50" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span
-                          className="inline-block h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: m.color }}
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{
+                            background: meetingColor,
+                            boxShadow: `0 0 6px ${meetingColor}`,
+                          }}
                         />
-                        <div className="truncate text-sm font-semibold text-slate-900">{m.title}</div>
+                        <div className="truncate text-[13px] font-bold text-slate-200">
+                          {m.title}
+                        </div>
                       </div>
-                      <div className="mt-0.5 text-xs text-slate-600">{timeTxt}</div>
+                      <div className="font-mono text-[10px] text-indigo-400 mt-0.5">
+                        {timeTxt}
+                      </div>
                       {m.location ? (
-                        <div className="mt-0.5 truncate text-xs text-slate-500">{m.location}</div>
+                        <div className="text-[10px] text-slate-600 mt-0.5 truncate">
+                          {m.location}
+                        </div>
                       ) : null}
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1">
-                      <button
+                      <GlassButton
+                        variant="ghost"
                         onClick={() => onEditMeeting(m.id)}
-                        className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                        className="text-xs px-2 py-1"
                         title="Edit meeting"
                       >
                         Edit
-                      </button>
-                      <button
+                      </GlassButton>
+                      <GlassButton
+                        variant="danger"
                         onClick={() => onDeleteMeeting(m.id)}
-                        className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                        className="text-xs px-2 py-1"
                         title="Delete meeting"
                       >
                         Del
-                      </button>
+                      </GlassButton>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+                </GlassCard>
+              );
+            })}
 
-      <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
-        Meetings use Singapore date/time input, are stored in UTC in IndexedDB, and rendered across all timezones.
+            {/* + New Meeting dashed card */}
+            <div
+              className="border border-dashed border-indigo-500/25 rounded-xl p-3 text-center text-[11px] font-semibold text-slate-600 hover:border-indigo-500/40 hover:text-slate-400 transition-all cursor-pointer"
+              onClick={onStartCreate}
+            >
+              + New Meeting
+            </div>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }

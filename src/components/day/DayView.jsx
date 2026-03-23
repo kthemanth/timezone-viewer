@@ -382,9 +382,18 @@ export default function DayView({ selectedDateISO }) {
   }
 
   return (
-    <div className="w-full flex gap-6">
-      <aside className="w-72 shrink-0">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div
+      className="w-full flex overflow-hidden"
+      style={{ height: "calc(100vh - 53px)", background: "#06061a" }}
+    >
+      <aside
+        className="w-72 shrink-0 overflow-y-auto"
+        style={{
+          background: "rgba(8,8,24,0.9)",
+          borderRight: "1px solid rgba(99,102,241,0.12)",
+        }}
+      >
+        <div className="p-4">
           <TimezoneSidebar
             zones={zones}
             use12h={use12h}
@@ -397,28 +406,12 @@ export default function DayView({ selectedDateISO }) {
             favoriteZoneIds={favoriteZoneIds}
             onToggleFavorite={toggleFavorite}
           />
-
-          <div className="mt-8 border-t border-slate-200 pt-6">
-            <MeetingsPanel
-              use12h={use12h}
-              meetingForm={meetingForm}
-              setMeetingForm={setMeetingForm}
-              onSaveMeeting={saveMeeting}
-              meetingsForDay={meetingsForDay}
-              onDeleteMeeting={deleteMeeting}
-              onEditMeeting={startEditMeeting}
-              onStartCreate={startCreateMeeting}
-              onCancelEdit={cancelEditMeeting}
-              editingMeetingId={editingMeetingId}
-              error={meetingError}
-            />
-          </div>
         </div>
       </aside>
 
-      <section className="flex-1 min-w-0">
-        <div className="rounded-2xl border border-slate-200 bg-white flex flex-col h-[calc(100vh-160px)]">
-          <div className="flex items-baseline justify-between border-b border-slate-200 px-4 py-3">
+      <section className="flex-1 flex flex-col overflow-hidden relative min-w-0">
+        <div className="flex flex-col h-full">
+          <div className="flex items-baseline justify-between border-b border-slate-200/10 px-4 py-3">
             <div>
               <h1 className="text-lg font-semibold">Day view</h1>
               <div className="text-sm text-slate-500">
@@ -459,7 +452,11 @@ export default function DayView({ selectedDateISO }) {
             </div>
           </div>
 
-          <div ref={scrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-auto isolate">
+          <div
+            ref={scrollRef}
+            className="flex-1 min-h-0 overflow-x-auto overflow-y-auto isolate"
+            style={{ paddingRight: 260 }}
+          >
             <div className="relative" style={{ minWidth: LABEL_COL_W + TIMELINE_W }}>
               <TimeSelectionOverlay
                 selection={selection}
@@ -510,6 +507,32 @@ export default function DayView({ selectedDateISO }) {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+
+        <div
+          className="absolute top-0 bottom-0 right-0 overflow-y-auto"
+          style={{
+            width: 260,
+            background: "rgba(8,8,28,0.92)",
+            borderLeft: "1px solid rgba(99,102,241,0.2)",
+            backdropFilter: "blur(20px)",
+          }}
+        >
+          <div className="p-4">
+            <MeetingsPanel
+              use12h={use12h}
+              meetingForm={meetingForm}
+              setMeetingForm={setMeetingForm}
+              onSaveMeeting={saveMeeting}
+              meetingsForDay={meetingsForDay}
+              onDeleteMeeting={deleteMeeting}
+              onEditMeeting={startEditMeeting}
+              onStartCreate={startCreateMeeting}
+              onCancelEdit={cancelEditMeeting}
+              editingMeetingId={editingMeetingId}
+              error={meetingError}
+            />
           </div>
         </div>
       </section>

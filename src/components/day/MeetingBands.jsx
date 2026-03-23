@@ -144,10 +144,10 @@ function MeetingBand({
       title={`${meeting.title}\n${timeTxt}${meeting.location ? `\n${meeting.location}` : ""}`}
     >
       <div
-        className="h-full rounded-sm border"
+        className="h-full rounded-sm border-l-2"
         style={{
           borderColor: meeting.color,
-          backgroundColor: hexToRgba(meeting.color, 0.08),
+          backgroundColor: hexToRgba(meeting.color, 0.12),
         }}
       />
 
@@ -157,8 +157,17 @@ function MeetingBand({
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          className="rounded-sm border px-3 py-1 bg-white/90 backdrop-blur shadow-sm max-w-[360px] cursor-grab active:cursor-grabbing"
-          style={{ borderColor: meeting.color }}
+          className="max-w-[360px] cursor-grab active:cursor-grabbing"
+          style={{
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            background: 'rgba(13,13,43,0.7)',
+            borderRadius: 6,
+            padding: '3px 6px',
+            fontSize: 9,
+            fontWeight: 700,
+            color: 'white',
+          }}
           title="Click to edit or drag horizontally to reschedule"
         >
           <div className="flex items-center gap-2">
@@ -166,9 +175,9 @@ function MeetingBand({
               className="inline-block h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: meeting.color }}
             />
-            <span className="truncate text-[12px] font-semibold text-slate-900">{meeting.title}</span>
+            <span className="truncate">{meeting.title}</span>
           </div>
-          <div className="mt-0.5 text-left text-[10px] font-mono text-slate-600">{timeTxt} SGT</div>
+          <div className="mt-0.5 text-left font-mono" style={{ fontSize: 9 }}>{timeTxt} SGT</div>
         </button>
       </div>
     </div>

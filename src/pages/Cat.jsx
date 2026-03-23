@@ -1,46 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DateTime } from "luxon";
-import { FaArrowCircleLeft, FaArrowCircleRight } from "react-icons/fa";
 import { TIGROU_AUDIO, TIGROU_IMAGES } from "../data/tigrouMedia";
 import { useAuth } from "../auth/useAuth";
 import { fetchCatActivity, upsertCatActivity } from "../services/cloudStore";
-
-const ICON_SIZE = 24;
-
-function toISODate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function buildMonthGrid(year, monthIndex, weekStartsOn = 0) {
-  const firstOfMonth = new Date(year, monthIndex, 1);
-  const firstWeekday = firstOfMonth.getDay();
-  const offset = (firstWeekday - weekStartsOn + 7) % 7;
-
-  const gridStart = new Date(year, monthIndex, 1 - offset);
-  const today = new Date();
-
-  return Array.from({ length: 42 }, (_, i) => {
-    const date = new Date(
-      gridStart.getFullYear(),
-      gridStart.getMonth(),
-      gridStart.getDate() + i
-    );
-
-    return {
-      date,
-      day: date.getDate(),
-      inMonth: date.getMonth() === monthIndex,
-      isToday:
-        date.getFullYear() === today.getFullYear() &&
-        date.getMonth() === today.getMonth() &&
-        date.getDate() === today.getDate(),
-      iso: toISODate(date),
-    };
-  });
-}
+import { GlassButton, GlassBadge, GlassToggle } from "../components/ui";
 
 function emptyRow(dateISO) {
   return {
@@ -56,27 +19,6 @@ function emptyRow(dateISO) {
   };
 }
 
-function sanitizeTimes(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((value) => typeof value === "string" && /^\d{2}:\d{2}$/.test(value))
-    .slice(0, 2)
-    .sort();
-}
-
-function mealCount(row) {
-  return (row?.wetFoodTimes?.length ?? 0) + (row?.dryFoodTimes?.length ?? 0);
-}
-
-function completedCount(row) {
-  const wetDone = (row?.wetFoodTimes?.length ?? 0) > 0;
-  const dryDone = (row?.dryFoodTimes?.length ?? 0) > 0;
-  const sleptDone = (row?.sleptHours ?? 0) > 0;
-  const playedDone = Boolean(row?.played);
-  const poopedDone = Boolean(row?.pooped);
-  const treatsDone = Boolean(row?.treats);
-  return [wetDone, dryDone, sleptDone, playedDone, poopedDone, treatsDone].filter(Boolean).length;
-}
 
 function isFutureDay(iso, todayISO) {
   return iso > todayISO;
@@ -99,18 +41,15 @@ export default function Cat() {
   const { user } = useAuth();
   const todayISO = DateTime.now().setZone("Asia/Singapore").toISODate();
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [status, setStatus] = useState("");
+  const [_error, setError] = useState("");
+  const [_status, setStatus] = useState("");
   const [selectedDateISO, setSelectedDateISO] = useState(todayISO);
   const [draftRow, setDraftRow] = useState(() => emptyRow(todayISO));
 
-  const [imageIndex, setImageIndex] = useState(0);
-  const [imageFailed, setImageFailed] = useState(false);
-
-  const today = new Date();
-  const [view, setView] = useState(() => ({ year: today.getFullYear(), monthIndex: today.getMonth() }));
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [calendarMonth, setCalendarMonth] = useState(() => DateTime.now().setZone('Asia/Singapore').startOf('month'));
 
   const reloadActivity = useCallback(
     async (force = false) => {
@@ -149,71 +88,9 @@ export default function Cat() {
     setStatus("");
   }, [selectedDateISO, rowsByDate]);
 
-  const monthLabel = useMemo(() => {
-    const d = new Date(view.year, view.monthIndex, 1);
-    return d.toLocaleString("default", { month: "long", year: "numeric" });
-  }, [view.year, view.monthIndex]);
 
-  const cells = useMemo(() => buildMonthGrid(view.year, view.monthIndex, 0), [view.year, view.monthIndex]);
-  const effectiveRowsByDate = useMemo(() => {
-    const map = new Map(rowsByDate);
-    if (draftRow && draftRow.dateISO === selectedDateISO) {
-      map.set(selectedDateISO, draftRow);
-    }
-    return map;
-  }, [rowsByDate, draftRow, selectedDateISO]);
 
-  const currentImage = TIGROU_IMAGES.length > 0 ? TIGROU_IMAGES[imageIndex % TIGROU_IMAGES.length] : null;
-
-  function updateDraft(updateFn) {
-    if (selectedIsFuture) return;
-    setDraftRow((prev) => {
-      const base = prev ?? cloneRow(persistedSelectedRow);
-      return {
-        ...base,
-        ...updateFn(base),
-        updatedAt: new Date().toISOString(),
-      };
-    });
-  }
-
-  function setMealTimes(type, times) {
-    updateDraft(() => ({ [type]: sanitizeTimes(times) }));
-  }
-
-  function addMealTime(type) {
-    const current = selectedRow[type];
-    if (current.length >= 2) return;
-    const preset = current.length === 0 ? "08:00" : "20:00";
-    setMealTimes(type, [...current, preset]);
-  }
-
-  function removeMealTime(type, index) {
-    setMealTimes(
-      type,
-      selectedRow[type].filter((_, idx) => idx !== index)
-    );
-  }
-
-  function updateMealTime(type, index, value) {
-    const next = selectedRow[type].slice();
-    next[index] = value;
-    setMealTimes(type, next);
-  }
-
-  function setSleptHours(value) {
-    updateDraft(() => ({ sleptHours: Math.max(0, Math.min(24, value)) }));
-  }
-
-  function toggleFlag(key) {
-    updateDraft((existing) => ({ [key]: !existing[key] }));
-  }
-
-  function updateNotes(nextNotes) {
-    updateDraft(() => ({ notes: nextNotes }));
-  }
-
-  async function saveSelectedDay() {
+async function saveSelectedDay() {
     if (selectedIsFuture || !user?.id || !draftRow) return;
 
     setSaving(true);
@@ -237,399 +114,294 @@ export default function Cat() {
     }
   }
 
-  function discardDraft() {
-    setDraftRow(cloneRow(persistedSelectedRow));
-    setStatus("");
-  }
+const photos = TIGROU_IMAGES;
+  const sounds = TIGROU_AUDIO;
 
-  function prevMonth() {
-    setView((v) => {
-      const d = new Date(v.year, v.monthIndex - 1, 1);
-      return { year: d.getFullYear(), monthIndex: d.getMonth() };
-    });
-  }
-
-  function nextMonth() {
-    setView((v) => {
-      const d = new Date(v.year, v.monthIndex + 1, 1);
-      return { year: d.getFullYear(), monthIndex: d.getMonth() };
-    });
-  }
-
-  function playRandomCatAudio() {
-    if (TIGROU_AUDIO.length === 0) return;
-    const randomIndex = Math.floor(Math.random() * TIGROU_AUDIO.length);
-    const audio = new Audio(TIGROU_AUDIO[randomIndex]);
+  function playSound() {
+    if (sounds.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * sounds.length);
+    const audio = new Audio(sounds[randomIndex]);
     audio.play().catch(() => undefined);
   }
 
-  function showPrevImage() {
-    if (TIGROU_IMAGES.length <= 1) return;
-    setImageFailed(false);
-    setImageIndex((prev) => (prev - 1 + TIGROU_IMAGES.length) % TIGROU_IMAGES.length);
-  }
-
-  function showNextImage() {
-    if (TIGROU_IMAGES.length <= 1) return;
-    setImageFailed(false);
-    setImageIndex((prev) => (prev + 1) % TIGROU_IMAGES.length);
-  }
-
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
-      <aside className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Status</div>
-        <h1 className="mt-1 text-2xl font-bold text-slate-900">Tigrou Tracker</h1>
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <div className="text-sm text-slate-500">
-            Editing: {DateTime.fromISO(selectedDateISO).toFormat("cccc, dd LLL yyyy")}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => reloadActivity(true)}
-              disabled={loading || saving}
-              className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={saveSelectedDay}
-              disabled={selectedIsFuture || saving || !hasUnsavedChanges}
-              className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={discardDraft}
-              disabled={selectedIsFuture || saving || !hasUnsavedChanges}
-              className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Discard
-            </button>
-          </div>
-        </div>
+    <div className="min-h-screen p-4 md:p-6 font-sans" style={{ background: '#06061a' }}>
+      {/* Fuchsia ambient orbs */}
+      <div className="pointer-events-none fixed top-0 right-0 w-[400px] h-[300px]" style={{ background: 'radial-gradient(ellipse,rgba(217,70,239,0.10) 0%,transparent 65%)', borderRadius: '50%' }} />
+      <div className="pointer-events-none fixed bottom-0 left-0 w-[350px] h-[280px]" style={{ background: 'radial-gradient(ellipse,rgba(168,85,247,0.08) 0%,transparent 65%)', borderRadius: '50%' }} />
 
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-3">
-          <div className="relative">
-            {currentImage && !imageFailed ? (
-              <button type="button" onClick={playRandomCatAudio} className="w-full" title="MEOW!">
-                <img
-                  src={currentImage}
-                  alt="Tigrou"
-                  onError={() => setImageFailed(true)}
-                  className="h-52 w-full rounded-xl object-cover"
-                />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={playRandomCatAudio}
-                className="h-52 w-full rounded-xl border border-dashed border-amber-300 bg-white text-7xl"
-                title="Play Tigrou sound"
-              >
-                🐈
-              </button>
-            )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 relative z-10">
 
-            <button
-              type="button"
-              onClick={showPrevImage}
-              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 text-sm text-slate-800"
-              aria-label="Previous Tigrou photo"
-            >
-              <FaArrowCircleLeft size={ICON_SIZE} />
-            </button>
-            <button
-              type="button"
-              onClick={showNextImage}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 text-sm text-slate-800"
-              aria-label="Next Tigrou photo"
-            >
-              <FaArrowCircleRight size={ICON_SIZE} />
-            </button>
-          </div>
-
-          <div className="mt-2 text-center text-xs text-slate-600">
-            {TIGROU_IMAGES.length > 0 ? `Photo ${imageIndex + 1}/${TIGROU_IMAGES.length}` : "Add images in public/media/tigrou/images"}
-          </div>
-        </div>
-
-        <div className="mt-5 space-y-3">
-          <MealTimeEditor
-            label="Ate wet food"
-            times={selectedRow.wetFoodTimes}
-            onAdd={() => addMealTime("wetFoodTimes")}
-            onUpdate={(idx, value) => updateMealTime("wetFoodTimes", idx, value)}
-            onRemove={(idx) => removeMealTime("wetFoodTimes", idx)}
-            disabled={selectedIsFuture}
-          />
-
-          <MealTimeEditor
-            label="Ate dry food"
-            times={selectedRow.dryFoodTimes}
-            onAdd={() => addMealTime("dryFoodTimes")}
-            onUpdate={(idx, value) => updateMealTime("dryFoodTimes", idx, value)}
-            onRemove={(idx) => removeMealTime("dryFoodTimes", idx)}
-            disabled={selectedIsFuture}
-          />
-
-          <div className="rounded-xl border border-slate-200 p-3">
-            <label className="text-sm font-medium text-slate-700">Slept (hours)</label>
-            <input
-              type="number"
-              min={0}
-              max={24}
-              step={0.5}
-              value={selectedRow.sleptHours}
-              disabled={selectedIsFuture}
-              onChange={(e) => setSleptHours(Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {["played", "pooped", "treats"].map((key) => {
-              const active = Boolean(selectedRow[key]);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  disabled={selectedIsFuture}
-                  onClick={() => toggleFlag(key)}
-                  className={[
-                    "rounded-xl border px-3 py-2 text-sm font-medium",
-                    active ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700",
-                    selectedIsFuture ? "cursor-not-allowed opacity-50" : "hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  {active ? "✓ " : "○ "}
-                  {key === "played" ? "Played" : key === "pooped" ? "Pooped" : "Treats"}
-                </button>
-              );
-            })}
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-slate-700">Daily notes</label>
-            <textarea
-              rows={3}
-              disabled={selectedIsFuture}
-              className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-slate-100"
-              value={selectedRow.notes}
-              onChange={(e) => updateNotes(e.target.value)}
-              placeholder="Any special updates about Tigrou..."
-            />
-          </div>
-
-          {selectedIsFuture ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              Future dates are read-only. You can edit only past and current days.
+        {/* LEFT: Photo carousel + quick stats */}
+        <div className="flex flex-col gap-3">
+          {/* Photo card */}
+          <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(217,70,239,0.2)', background: 'rgba(13,13,43,0.7)', backdropFilter: 'blur(12px)' }}>
+            <div className="relative h-72 flex items-center justify-center" style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.15),rgba(217,70,239,0.2))' }}>
+              {photos.length > 0
+                ? <img src={photos[photoIndex]} alt="Tigrou" className="h-full w-full object-contain" />
+                : <span style={{ fontSize: 64, filter: 'drop-shadow(0 0 20px rgba(217,70,239,0.4))' }}>🐱</span>
+              }
+              {/* Carousel controls */}
+              {photos.length > 1 && (
+                <>
+                  <button onClick={() => setPhotoIndex(i => (i - 1 + photos.length) % photos.length)}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center text-[10px] text-slate-400"
+                    style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(4px)' }}>◀</button>
+                  <button onClick={() => setPhotoIndex(i => (i + 1) % photos.length)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center text-[10px] text-slate-400"
+                    style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(4px)' }}>▶</button>
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                    {photos.map((_, i) => (
+                      <div key={i} onClick={() => setPhotoIndex(i)} className="cursor-pointer transition-all duration-200"
+                        style={{ height: 4, width: i === photoIndex ? 18 : 6, borderRadius: 2, background: i === photoIndex ? 'linear-gradient(90deg,#d946ef,#a855f7)' : 'rgba(255,255,255,0.2)' }} />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-          ) : null}
-
-          {status ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{status}</div>
-          ) : null}
-
-          {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
-          ) : null}
-        </div>
-      </aside>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Activities Summary</h2>
-            <div className="text-sm text-slate-500">Hover over a day for full details!</div>
+            <div className="p-3 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-extrabold text-slate-100">Tigrou</div>
+                <div className="text-[10px] text-purple-400 font-medium mt-0.5">
+                  {selectedDateISO === DateTime.now().toISODate() ? 'Today 😸' : selectedDateISO}
+                </div>
+              </div>
+              {sounds.length > 0 && (
+                <button onClick={playSound} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-fuchsia-300 transition-all"
+                  style={{ background: 'rgba(217,70,239,0.15)', border: '1px solid rgba(217,70,239,0.3)' }}>
+                  🔊 Purr
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={prevMonth}
-              className="hover:text-blue-500 transition-colors"
-              aria-label="Previous month"
-              title="Previous month"
-            >
-              <FaArrowCircleLeft size={ICON_SIZE} />
-            </button>
-            <div className="min-w-36 text-center text-base font-semibold">{monthLabel}</div>
-            <button
-              onClick={nextMonth}
-              className="hover:text-blue-500 transition-colors"
-              aria-label="Next month"
-              title="Next month"
-            >
-              <FaArrowCircleRight size={ICON_SIZE} />
-            </button>
+          {/* Quick stats */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { emoji: '🍖', label: 'Fed', value: `${(draftRow?.wetFoodTimes?.length ?? 0) + (draftRow?.dryFoodTimes?.length ?? 0)}×`, color: 'rgba(217,70,239,', border: 'rgba(217,70,239,' },
+              { emoji: '😴', label: 'Sleep', value: `${draftRow?.sleptHours ?? 0}h`, color: 'rgba(139,92,246,', border: 'rgba(139,92,246,' },
+              { emoji: '🎮', label: 'Play', value: draftRow?.played ? '✓' : '—', color: 'rgba(99,102,241,', border: 'rgba(99,102,241,' },
+            ].map(({ emoji, label, value, color, border }) => (
+              <div key={label} className="rounded-xl p-2.5 text-center" style={{ background: `${color}0.10)`, border: `1px solid ${border}0.22)` }}>
+                <div style={{ fontSize: 20 }}>{emoji}</div>
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{label}</div>
+                <div className="text-[11px] font-bold text-slate-100 mt-0.5">{value}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {loading ? <div className="mt-4 text-sm text-slate-500">Loading cat activity...</div> : null}
+        {/* RIGHT: Activity form */}
+        <div className="rounded-2xl p-4" style={{ background: 'rgba(13,13,43,0.7)', border: '1px solid rgba(139,92,246,0.18)', backdropFilter: 'blur(12px)' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-bold text-slate-100">Daily Log</div>
+            <GlassBadge variant="fuchsia">{selectedDateISO}</GlassBadge>
+          </div>
 
-        <div className="mt-4 grid grid-cols-7 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((name) => (
-            <div key={name}>{name}</div>
+          {/* Wet food times */}
+          <div className="mb-3">
+            <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">🥩 Wet Food Times</div>
+            <div className="flex flex-wrap gap-1.5">
+              {(draftRow?.wetFoodTimes ?? []).map((t, i) => (
+                <button key={i} onClick={() => setDraftRow(d => ({ ...d, wetFoodTimes: d.wetFoodTimes.filter((_,j)=>j!==i) }))}
+                  className="font-mono text-[11px] font-semibold text-fuchsia-300 px-2.5 py-1 rounded-lg transition-all hover:opacity-75"
+                  style={{ background: 'rgba(217,70,239,0.15)', border: '1px solid rgba(217,70,239,0.3)' }}>{t}</button>
+              ))}
+              <button
+                onClick={() => { const t = prompt('Enter time (HH:MM)'); if (t) setDraftRow(d => ({ ...d, wetFoodTimes: [...(d.wetFoodTimes??[]), t] })) }}
+                className="text-[11px] text-slate-600 px-2.5 py-1 rounded-lg transition-all hover:text-slate-400"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.1)' }}>+ Add</button>
+            </div>
+          </div>
+
+          {/* Dry food times */}
+          <div className="mb-3">
+            <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">🥜 Dry Food Times</div>
+            <div className="flex flex-wrap gap-1.5">
+              {(draftRow?.dryFoodTimes ?? []).map((t, i) => (
+                <button key={i} onClick={() => setDraftRow(d => ({ ...d, dryFoodTimes: d.dryFoodTimes.filter((_,j)=>j!==i) }))}
+                  className="font-mono text-[11px] font-semibold text-violet-300 px-2.5 py-1 rounded-lg transition-all hover:opacity-75"
+                  style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)' }}>{t}</button>
+              ))}
+              <button
+                onClick={() => { const t = prompt('Enter time (HH:MM)'); if (t) setDraftRow(d => ({ ...d, dryFoodTimes: [...(d.dryFoodTimes??[]), t] })) }}
+                className="text-[11px] text-slate-600 px-2.5 py-1 rounded-lg transition-all hover:text-slate-400"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.1)' }}>+ Add</button>
+            </div>
+          </div>
+
+          {/* Activity toggles 2×2 grid */}
+          <div className="mb-3">
+            <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">Activities</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl p-2.5 flex items-center justify-between" style={{ background: draftRow?.played ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${draftRow?.played ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.08)'}` }}>
+                <span className="text-[11px] font-semibold text-indigo-300">🎮 Played</span>
+                <GlassToggle checked={!!draftRow?.played} onChange={v => setDraftRow(d => ({ ...d, played: v }))} />
+              </div>
+              <div className="rounded-xl p-2.5 flex items-center justify-between" style={{ background: draftRow?.treats ? 'rgba(217,70,239,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${draftRow?.treats ? 'rgba(217,70,239,0.35)' : 'rgba(255,255,255,0.08)'}` }}>
+                <span className="text-[11px] font-semibold text-fuchsia-300">🍬 Treats</span>
+                <GlassToggle checked={!!draftRow?.treats} onChange={v => setDraftRow(d => ({ ...d, treats: v }))} />
+              </div>
+              <div className="rounded-xl p-2.5 flex items-center justify-between" style={{ background: draftRow?.pooped ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${draftRow?.pooped ? 'rgba(168,85,247,0.35)' : 'rgba(255,255,255,0.08)'}` }}>
+                <span className="text-[11px] font-semibold text-violet-300">💩 Bathroom</span>
+                <GlassToggle checked={!!draftRow?.pooped} onChange={v => setDraftRow(d => ({ ...d, pooped: v }))} />
+              </div>
+              {/* Sleep stepper */}
+              <div className="rounded-xl p-2.5 flex items-center justify-between" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)' }}>
+                <span className="text-[11px] font-semibold text-violet-300">😴 Sleep</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setDraftRow(d => ({ ...d, sleptHours: Math.max(0, (d.sleptHours??0) - 1) }))} className="text-slate-600 hover:text-slate-300 text-sm leading-none">−</button>
+                  <span className="font-mono text-[12px] font-bold text-slate-100 min-w-[28px] text-center">{draftRow?.sleptHours ?? 0}h</span>
+                  <button onClick={() => setDraftRow(d => ({ ...d, sleptHours: Math.min(24, (d.sleptHours??0) + 1) }))} className="text-slate-600 hover:text-slate-300 text-sm leading-none">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="mb-3">
+            <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">📝 Notes</div>
+            <textarea
+              value={draftRow?.notes ?? ''}
+              onChange={e => setDraftRow(d => ({ ...d, notes: e.target.value }))}
+              placeholder="Anything notable today…"
+              rows={2}
+              className="w-full rounded-[10px] px-3 py-2 text-sm text-slate-300 resize-none focus:outline-none transition-all duration-200"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'Outfit, sans-serif' }}
+            />
+          </div>
+
+          {/* Save row */}
+          <div className="flex items-center gap-2">
+            <GlassButton variant="cat" onClick={saveSelectedDay} disabled={saving} className="flex-1">
+              {saving ? 'Saving…' : 'Save Log ✓'}
+            </GlassButton>
+            {hasUnsavedChanges && <GlassBadge variant="warn">● Unsaved</GlassBadge>}
+          </div>
+        </div>
+      </div>
+
+      {/* Activity Calendar */}
+      <div className="relative z-10 rounded-2xl p-4" style={{ background: 'rgba(13,13,43,0.6)', border: '1px solid rgba(139,92,246,0.15)', backdropFilter: 'blur(12px)' }}>
+        {/* Header with month navigation */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => setCalendarMonth(m => m.minus({ months: 1 }))}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] text-slate-500 border border-white/[0.06] hover:text-slate-300 hover:bg-white/[0.04] transition-all"
+          >◀</button>
+          <div className="text-xs font-bold text-slate-100">{calendarMonth.toFormat('MMMM yyyy')}</div>
+          <button
+            onClick={() => setCalendarMonth(m => m.plus({ months: 1 }))}
+            disabled={calendarMonth >= DateTime.now().setZone('Asia/Singapore').startOf('month')}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] text-slate-500 border border-white/[0.06] hover:text-slate-300 hover:bg-white/[0.04] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >▶</button>
+        </div>
+
+        {/* Day-of-week headers */}
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+            <div key={d} className="text-center text-[9px] font-bold text-slate-700 uppercase tracking-wider py-0.5">{d}</div>
           ))}
         </div>
 
-        <div className="mt-2 grid grid-cols-7 rounded-2xl border border-slate-200">
-          {cells.map((cell) => {
-            const row = effectiveRowsByDate.get(cell.iso) ?? emptyRow(cell.iso);
-            const done = completedCount(row);
-            const isOut = !cell.inMonth;
-            const future = isFutureDay(cell.iso, todayISO);
-            const selected = selectedDateISO === cell.iso;
-            const meals = mealCount(row);
+        {/* Calendar grid */}
+        {(() => {
+          const firstDay = calendarMonth.startOf('month')
+          const offset = firstDay.weekday - 1  // Mon=0, Sun=6
+          const daysInMonth = calendarMonth.daysInMonth
+          const cells = [
+            ...Array(offset).fill(null),
+            ...Array.from({ length: daysInMonth }, (_, i) => calendarMonth.set({ day: i + 1 })),
+          ]
+          return (
+            <div className="grid grid-cols-7 gap-1">
+              {cells.map((day, i) => {
+                if (!day) return <div key={`empty-${i}`} />
+                const iso = day.toISODate()
+                const row = rowsByDate.get(iso)
+                const count = row ? [
+                  (row.wetFoodTimes?.length > 0),
+                  (row.dryFoodTimes?.length > 0),
+                  (row.sleptHours > 0),
+                  row.played, row.pooped, row.treats,
+                ].filter(Boolean).length : 0
+                const intensity = count / 6
+                const isTodayCell = iso === todayISO
+                const isSelected = iso === selectedDateISO
+                const isFuture = iso > todayISO
+                const bg = isTodayCell
+                  ? 'linear-gradient(135deg,#a855f7,#d946ef)'
+                  : isFuture
+                    ? 'rgba(255,255,255,0.02)'
+                    : count === 0
+                      ? 'rgba(255,255,255,0.04)'
+                      : `rgba(217,70,239,${intensity * 0.55 + 0.08})`
 
-            return (
-              <button
-                key={cell.iso}
-                type="button"
-                onClick={() => {
-                  if (future) return;
-                  setSelectedDateISO(cell.iso);
-                }}
-                className={[
-                  "group relative min-h-[110px] border-b border-r border-slate-200 p-2 text-left",
-                  isOut ? "bg-white text-slate-300" : "bg-slate-50 text-slate-800",
-                  cell.isToday ? "ring-2 ring-amber-300 ring-inset" : "",
-                  selected ? "ring-2 ring-blue-300 ring-inset" : "",
-                  future ? "cursor-not-allowed opacity-60" : "hover:bg-white",
-                ].join(" ")}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold">{String(cell.day).padStart(2, "0")}</div>
-                  {!isOut ? (
+                const tooltipLines = row ? [
+                  row.wetFoodTimes?.length ? `🥩 Wet: ${row.wetFoodTimes.join(', ')}` : null,
+                  row.dryFoodTimes?.length ? `🥜 Dry: ${row.dryFoodTimes.join(', ')}` : null,
+                  row.sleptHours ? `😴 Sleep: ${row.sleptHours}h` : null,
+                  row.played ? '🎮 Played' : null,
+                  row.pooped ? '💩 Bathroom' : null,
+                  row.treats ? '🍬 Treats' : null,
+                  row.notes ? `📝 ${row.notes}` : null,
+                ].filter(Boolean) : []
+
+                return (
+                  <div key={iso} className="relative group" onClick={() => !isFuture && setSelectedDateISO(iso)}>
                     <div
-                      className={[
-                        "rounded-full px-2 py-0.5 text-[10px] font-semibold text-white",
-                        done === 6 ? "bg-emerald-600" : done >= 4 ? "bg-amber-500" : "bg-slate-700",
-                      ].join(" ")}
+                      className={`flex flex-col items-center justify-center rounded-lg py-1.5 transition-all duration-150 ${!isFuture ? 'cursor-pointer hover:brightness-125' : 'cursor-default opacity-30'} ${isSelected && !isTodayCell ? 'ring-2 ring-violet-500/60 ring-offset-1 ring-offset-[#06061a]' : ''}`}
+                      style={{
+                        background: bg,
+                        boxShadow: isTodayCell ? '0 0 8px rgba(217,70,239,0.5)' : count > 4 ? '0 0 4px rgba(217,70,239,0.25)' : 'none',
+                        minHeight: 36,
+                      }}
                     >
-                      {done}/6
-                    </div>
-                  ) : null}
-                </div>
-
-                {!isOut ? (
-                  <div className="mt-2 space-y-1 text-[11px]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Meals</span>
-                      <span className={meals >= 2 ? "text-emerald-700 font-semibold" : "text-slate-700"}>
-                        {meals}/4
+                      <span className={`text-[11px] font-${isTodayCell ? 'extrabold' : 'medium'} ${isTodayCell ? 'text-white' : isSelected ? 'text-violet-300' : isFuture ? 'text-slate-800' : count > 0 ? 'text-fuchsia-200' : 'text-slate-600'}`}>
+                        {day.day}
                       </span>
+                      {!isFuture && count > 0 && (
+                        <div className="flex gap-[2px] mt-0.5">
+                          {[...Array(Math.min(count, 4))].map((_, j) => (
+                            <div key={j} style={{ width: 3, height: 3, borderRadius: '50%', background: isTodayCell ? 'rgba(255,255,255,0.7)' : 'rgba(217,70,239,0.7)' }} />
+                          ))}
+                          {count > 4 && <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(217,70,239,0.4)' }} />}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex gap-1">
-                      <StatusDot active={row.played} label="Played" />
-                      <StatusDot active={row.pooped} label="Pooped" />
-                      <StatusDot active={row.treats} label="Treats" />
-                      <StatusDot active={row.sleptHours > 0} label="Slept" />
-                    </div>
+
+                    {/* Hover tooltip */}
+                    {!isFuture && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-20 hidden group-hover:block pointer-events-none" style={{ minWidth: 150 }}>
+                        <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(13,13,43,0.97)', border: '1px solid rgba(139,92,246,0.4)', backdropFilter: 'blur(16px)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+                          <div className="text-[10px] font-bold text-violet-300 mb-1.5">{DateTime.fromISO(iso).toFormat('EEE, MMM d')}</div>
+                          {tooltipLines.length > 0
+                            ? tooltipLines.map((line, j) => (
+                              <div key={j} className="text-[10px] text-slate-300 leading-relaxed">{line}</div>
+                            ))
+                            : <div className="text-[10px] text-slate-600 italic">No activity logged</div>
+                          }
+                        </div>
+                        <div className="absolute top-full left-1/2 -translate-x-1/2" style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid rgba(139,92,246,0.4)' }} />
+                      </div>
+                    )}
                   </div>
-                ) : null}
+                )
+              })}
+            </div>
+          )
+        })()}
 
-                {!isOut ? (
-                  <div className="pointer-events-none absolute left-1/2 top-2 z-20 hidden w-64 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl group-hover:block">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-slate-800">
-                        {DateTime.fromISO(cell.iso).toFormat("dd LLL yyyy")}
-                      </div>
-                      <div className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white">
-                        {done}/6
-                      </div>
-                    </div>
-
-                    <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
-                      <MetricChip label="Wet Food" value={row.wetFoodTimes.length ? row.wetFoodTimes.join(", ") : "None"} />
-                      <MetricChip label="Dry Food" value={row.dryFoodTimes.length ? row.dryFoodTimes.join(", ") : "None"} />
-                      <MetricChip label="Sleep" value={`${row.sleptHours}h`} success={row.sleptHours > 0} />
-                      <MetricChip label="Played" value={row.played ? "Yes" : "No"} success={row.played} />
-                      <MetricChip label="Pooped" value={row.pooped ? "Yes" : "No"} success={row.pooped} />
-                      <MetricChip label="Treats" value={row.treats ? "Yes" : "No"} success={row.treats} />
-                      <MetricChip label="Meals" value={`${meals}/4`} success={meals >= 2} />
-                    </div>
-
-                    {row.notes ? (
-                      <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[10px] text-slate-600">
-                        <span className="font-semibold text-slate-700">Notes:</span> {row.notes}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </button>
-            );
-          })}
+        {/* Legend */}
+        <div className="flex items-center gap-3 mt-3 justify-end">
+          {[{label:'No data',bg:'rgba(255,255,255,0.04)'},{label:'Some',bg:'rgba(217,70,239,0.3)'},{label:'All done',bg:'rgba(217,70,239,0.7)'}].map(({label,bg}) => (
+            <div key={label} className="flex items-center gap-1">
+              <div style={{width:10,height:10,borderRadius:3,background:bg}} />
+              <span className="text-[9px] text-slate-600">{label}</span>
+            </div>
+          ))}
         </div>
-      </section>
-    </div>
-  );
-}
-
-function MealTimeEditor({ label, times, onAdd, onUpdate, onRemove, disabled }) {
-  return (
-    <div className="rounded-xl border border-slate-200 p-3">
-      <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-slate-700">{label}</label>
-        <button
-          type="button"
-          disabled={disabled || times.length >= 2}
-          onClick={onAdd}
-          className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          + Time
-        </button>
       </div>
-
-      {times.length === 0 ? <div className="mt-2 text-xs text-slate-500">No timing added yet.</div> : null}
-
-      <div className="mt-2 space-y-1">
-        {times.map((value, idx) => (
-          <div key={`${label}_${idx}`} className="flex items-center gap-2">
-            <input
-              type="time"
-              value={value}
-              disabled={disabled}
-              onChange={(e) => onUpdate(idx, e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm disabled:bg-slate-100"
-            />
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => onRemove(idx)}
-              className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Del
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StatusDot({ active, label }) {
-  return (
-    <span
-      className={[
-        "rounded-full px-2 py-0.5 text-[8px] font-semibold",
-        active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500",
-      ].join(" ")}
-      title={label}
-    >
-      {label[0]}
-    </span>
-  );
-}
-
-function MetricChip({ label, value, success = false }) {
-  return (
-    <div className={["rounded-lg border px-2 py-1", success ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"].join(" ")}>
-      <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-0.5 truncate text-[10px] font-medium text-slate-700">{value}</div>
     </div>
   );
 }

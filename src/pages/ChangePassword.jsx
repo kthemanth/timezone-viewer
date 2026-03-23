@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
+import { GlassInput, GlassButton, GlassBadge } from "../components/ui";
 
 export default function ChangePassword() {
   const navigate = useNavigate();
@@ -62,79 +63,46 @@ export default function ChangePassword() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 grid place-items-center p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-bold text-slate-900">Change Password</h1>
-        <p className="mt-1 text-sm text-slate-500">Use your current credentials, then set a new password.</p>
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden font-sans" style={{ background: "#06061a" }}>
+      <div className="pointer-events-none absolute -top-10 -right-10 w-[260px] h-[260px]" style={{ background: "radial-gradient(ellipse,rgba(168,85,247,0.15) 0%,transparent 65%)", borderRadius: "50%" }} />
+      <div className="pointer-events-none absolute -bottom-10 -left-5 w-[220px] h-[220px]" style={{ background: "radial-gradient(ellipse,rgba(99,102,241,0.10) 0%,transparent 65%)", borderRadius: "50%" }} />
+      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(139,92,246,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(139,92,246,0.03) 1px,transparent 1px)", backgroundSize: "32px 32px" }} />
 
-        <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
+      <div className="relative z-10 w-full max-w-sm rounded-[20px] p-8" style={{ background: "rgba(13,13,43,0.8)", border: "1px solid rgba(139,92,246,0.22)", backdropFilter: "blur(24px)", boxShadow: "0 0 60px rgba(139,92,246,0.08),0 24px 48px rgba(0,0,0,0.4)" }}>
 
-          <div>
-            <label className="text-sm font-medium text-slate-700">Current password</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
+        <div className="flex gap-1.5 mb-6 justify-center">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-1 flex-1 rounded-full" style={{ background: i === 1 ? "linear-gradient(90deg,#6366f1,#8b5cf6)" : "rgba(255,255,255,0.07)" }} />
+          ))}
+        </div>
 
-          <div>
-            <label className="text-sm font-medium text-slate-700">New password</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
+        <div className="text-center mb-6">
+          <div className="w-11 h-11 rounded-[12px] inline-flex items-center justify-center text-xl mb-3" style={{ background: "linear-gradient(135deg,#8b5cf6,#d946ef)", boxShadow: "0 0 20px rgba(139,92,246,0.5)" }}>🔐</div>
+          <div className="text-base font-extrabold text-slate-100 tracking-tight">Change Password</div>
+          <div className="text-[11px] text-slate-600 mt-0.5">Enter your current password to continue.</div>
+        </div>
 
-          <div>
-            <label className="text-sm font-medium text-slate-700">Confirm new password</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <GlassInput label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <GlassInput label="Current Password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+          <GlassInput label="New Password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+          <GlassInput label="Confirm New Password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
 
-          {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
-          ) : null}
+          <GlassBadge variant="warn" className="self-start text-[10px]">You&apos;ll stay logged in on this device</GlassBadge>
 
-          {success ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div>
-          ) : null}
+          {error && <GlassBadge variant="error" className="self-start">{error}</GlassBadge>}
+          {success && <GlassBadge variant="success" className="self-start">Password updated!</GlassBadge>}
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {busy ? "Updating..." : "Change password"}
-          </button>
+          <GlassButton type="submit" variant="primary" disabled={busy} className="w-full mt-1">
+            {busy ? "Updating…" : "Update Password →"}
+          </GlassButton>
         </form>
 
-        <Link to="/signin" className="mt-3 inline-block text-sm text-slate-600 underline">
-          Back to sign in
-        </Link>
+        <div className="mt-4 text-center">
+          <Link to="/signin" className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors">
+            Back to sign in
+          </Link>
+        </div>
       </div>
     </div>
   );

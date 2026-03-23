@@ -25,3 +25,8 @@ dist-ssr
 
 .env
 .env.example
+
+.claude
+CLAUDE.md
+.superpowers
+docs

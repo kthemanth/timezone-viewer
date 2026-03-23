@@ -42,15 +42,16 @@ export default function MeetingBlocks({
             title={`${m.title}\n${startTxt}–${endTxt}${m.location ? `\n${m.location}` : ""}`}
           >
             <div
-              className="h-full rounded-lg border text-[11px] px-2 flex items-center gap-2 overflow-hidden"
+              className="h-full text-[11px] px-2 flex items-center gap-2 overflow-hidden"
               style={{
-                borderColor: m.color,
-                backgroundColor: hexToRgba(m.color, 0.2),
+                borderRadius: 8,
+                border: `1px solid ${hexToRgba(m.color, 0.35)}`,
+                backgroundColor: hexToRgba(m.color, 0.12),
               }}
             >
               <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: m.color }} />
-              <span className="truncate font-medium text-slate-900">{m.title}</span>
-              <span className="ml-auto shrink-0 font-mono text-[10px] text-slate-700/80">
+              <span className="truncate font-medium text-white">{m.title}</span>
+              <span className="ml-auto shrink-0 font-mono text-[10px] text-white/70">
                 {startTxt}–{endTxt}
               </span>
             </div>
