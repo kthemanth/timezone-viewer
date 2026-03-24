@@ -83,7 +83,7 @@ export default function SignIn() {
       >
         {/* Logo */}
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-[14px] inline-flex items-center justify-center text-2xl mb-3" style={{ background: 'linear-gradient(135deg,#6366f1,#a855f7)', boxShadow: '0 0 24px rgba(99,102,241,0.5)' }}>🌏</div>
+          <div className="w-12 h-12 rounded-[14px] inline-flex items-center justify-center mb-3 overflow-hidden" style={{ background: 'linear-gradient(135deg,#6366f1,#a855f7)', boxShadow: '0 0 24px rgba(99,102,241,0.5)' }}><img src="/favicon.png" alt="Quinn's Calendar" className="w-8 h-8 object-contain" /></div>
           <div className="text-lg font-extrabold text-slate-100 tracking-tight">Quinn&apos;s Calendar</div>
           <div className="text-[11px] text-slate-600 mt-0.5 font-medium">Invite-only · Encrypted</div>
         </div>

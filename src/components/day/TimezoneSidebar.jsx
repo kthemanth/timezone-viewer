@@ -200,15 +200,16 @@ export default function TimezoneSidebar({
         />
 
         <select
-          className="w-full rounded-[10px] px-3 py-[9px] text-sm text-slate-100 bg-white/[0.04] border border-white/10 focus:outline-none focus:border-indigo-500/50 transition-all duration-200"
+          className="w-full rounded-[10px] px-3 py-[9px] text-sm border border-white/10 focus:outline-none focus:border-indigo-500/50 transition-all duration-200"
+          style={{ background: '#0d0d2b', color: '#e2e8f0' }}
           value={selectedToAdd}
           onChange={(e) => setSelectedToAdd(e.target.value)}
         >
           {sortedOptions.length === 0 ? (
-            <option value="">No matches</option>
+            <option value="" style={{ background: '#0d0d2b', color: '#e2e8f0' }}>No matches</option>
           ) : (
             sortedOptions.map((o, idx) => (
-              <option key={`${o.id}_${o.label}_${idx}`} value={o.id}>
+              <option style={{ background: '#0d0d2b', color: '#e2e8f0' }} key={`${o.id}_${o.label}_${idx}`} value={o.id}>
                 {o.isFavorite ? `★ ${o.display}` : o.display}
               </option>
             ))
